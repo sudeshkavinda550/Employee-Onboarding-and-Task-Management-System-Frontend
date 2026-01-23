@@ -1,6 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import { authApi } from '../api/authApi';
-import { getToken, setToken, removeToken } from '../utils/tokenStorage';
+import authApi from '../api/authApi';
+import { getToken, setToken, removeToken, getRefreshToken, setRefreshToken, removeRefreshToken } from '../utils/tokenStorage';
 
 const AuthContext = createContext({});
 
@@ -21,10 +21,24 @@ export const AuthProvider = ({ children }) => {
 
   const verifyAuth = async () => {
     try {
-      const response = await authApi.verifyToken();
+      const response = await authApi.verifyToken(getToken());
       setUser(response.data.user);
     } catch (error) {
-      removeToken();
+      const refreshToken = getRefreshToken();
+      if (refreshToken) {
+        try {
+          const refreshResponse = await authApi.refreshToken(refreshToken);
+          setToken(refreshResponse.data.token);
+          setRefreshToken(refreshResponse.data.refreshToken);
+          const userResponse = await authApi.verifyToken(refreshResponse.data.token);
+          setUser(userResponse.data.user);
+        } catch (refreshError) {
+          removeToken();
+          removeRefreshToken();
+        }
+      } else {
+        removeToken();
+      }
     } finally {
       setLoading(false);
     }
@@ -32,32 +46,55 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (credentials) => {
     const response = await authApi.login(credentials);
-    const { token, user } = response.data;
+    const { token, refreshToken, user } = response.data;
     setToken(token);
+    setRefreshToken(refreshToken);
     setUser(user);
     return user;
   };
 
   const logout = async () => {
-    try {
-      await authApi.logout();
-    } finally {
-      removeToken();
-      setUser(null);
-      window.location.href = '/login';
+    const token = getToken();
+    if (token) {
+      try {
+        await authApi.logout(token);
+      } catch (error) {
+        console.error('Logout error:', error);
+      }
     }
+    removeToken();
+    removeRefreshToken();
+    setUser(null);
+    window.location.href = '/login';
   };
 
   const register = async (userData) => {
     const response = await authApi.register(userData);
-    const { token, user } = response.data;
+    const { token, refreshToken, user } = response.data;
     setToken(token);
+    setRefreshToken(refreshToken);
     setUser(user);
     return user;
   };
 
+  const forgotPassword = async (email) => {
+    const response = await authApi.forgotPassword(email);
+    return response.data;
+  };
+  
+  const resetPassword = async (email, otp, password) => {
+    const response = await authApi.resetPassword(email, otp, password);
+    return response.data;
+  };
+  
+  const verifyEmail = async (token) => {
+    const response = await authApi.verifyEmail(token);
+    return response.data;
+  };
+
   const updateProfile = async (data) => {
-    const response = await authApi.updateProfile(data);
+    const token = getToken();
+    const response = await authApi.updateProfile(data, token);
     setUser(response.data.user);
     return response.data.user;
   };
@@ -67,6 +104,9 @@ export const AuthProvider = ({ children }) => {
     login,
     logout,
     register,
+    verifyEmail,
+    forgotPassword,
+    resetPassword,
     updateProfile,
     loading
   };

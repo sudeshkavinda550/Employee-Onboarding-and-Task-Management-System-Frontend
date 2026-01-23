@@ -1,4 +1,3 @@
-// src/App.jsx (updated)
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
@@ -11,7 +10,7 @@ import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 // Home Page
-import Home from './pages/Home'; // Add this import
+import Home from './pages/Home';
 
 // Auth Pages
 import Login from './pages/auth/Login';
@@ -33,7 +32,6 @@ import Employees from './pages/hr/Employees';
 import Analytics from './pages/hr/Analytics';
 import CreateTemplate from './pages/hr/CreateTemplate';
 
-// Common Pages
 import Unauthorized from './pages/Unauthorized';
 import NotFound from './pages/NotFound';
 
@@ -44,7 +42,6 @@ const App = () => {
         <ThemeProvider>
           <div className="min-h-screen bg-gray-50">
             <Routes>
-              {/* Home Page (Public) */}
               <Route path="/" element={<Home />} />
               
               {/* Auth Routes */}
@@ -53,7 +50,6 @@ const App = () => {
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/reset-password" element={<ResetPassword />} />
 
-              {/* Protected Routes - Show Navbar & Sidebar only here */}
               <Route path="/*" element={
                 <ProtectedRoute>
                   <div className="flex">

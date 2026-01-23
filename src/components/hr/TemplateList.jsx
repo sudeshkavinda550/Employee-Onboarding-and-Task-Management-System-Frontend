@@ -15,11 +15,6 @@ const Templates = () => {
   const fetchTemplates = async () => {
     try {
       setLoading(true);
-      // TODO: Replace with actual API call
-      // const response = await templateApi.getAllTemplates();
-      // setTemplates(response.data);
-      
-      // Mock data for demonstration
       const mockTemplates = [
         {
           id: 1,
@@ -62,8 +57,6 @@ const Templates = () => {
   const handleDelete = async (templateId) => {
     if (window.confirm('Are you sure you want to delete this template?')) {
       try {
-        // TODO: Replace with actual API call
-        // await templateApi.deleteTemplate(templateId);
         fetchTemplates();
       } catch (error) {
         console.error('Error deleting template:', error);
@@ -73,8 +66,6 @@ const Templates = () => {
 
   const handleDuplicate = async (template) => {
     try {
-      // TODO: Replace with actual API call
-      // await templateApi.duplicateTemplate(template.id);
       fetchTemplates();
     } catch (error) {
       console.error('Error duplicating template:', error);
@@ -89,11 +80,7 @@ const Templates = () => {
   const handleFormSubmit = async (formData) => {
     try {
       if (editingTemplate) {
-        // TODO: Replace with actual API call
-        // await templateApi.updateTemplate(editingTemplate.id, formData);
       } else {
-        // TODO: Replace with actual API call
-        // await templateApi.createTemplate(formData);
       }
       handleFormClose();
       fetchTemplates();
