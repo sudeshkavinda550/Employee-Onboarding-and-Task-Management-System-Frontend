@@ -63,6 +63,26 @@ const authApi = {
     return response.data;
   },
 
+  changePassword: async (data) => {
+    const response = await api.post('/auth/change-password', data);
+    return response.data;
+  },
+
+  // Profile picture methods
+  uploadProfilePicture: async (formData) => {
+    const response = await api.post('/auth/profile/picture', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+
+  deleteProfilePicture: async () => {
+    const response = await api.delete('/auth/profile/picture');
+    return response.data;
+  },
+
   refreshToken: async (refreshToken) => {
     const response = await api.post('/auth/refresh', {
       refreshToken

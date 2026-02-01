@@ -1,10 +1,19 @@
 import axiosInstance from './axios';
 
 export const employeeApi = {
+  // Employee profile endpoints
   getProfile: () => axiosInstance.get('/employees/profile'),
   updateProfile: (data) => axiosInstance.put('/employees/profile', data),
   getDashboard: () => axiosInstance.get('/employees/dashboard'),
   getDocuments: () => axiosInstance.get('/employees/documents'),
+  
+  // Profile picture upload
+  uploadProfilePicture: (formData) => 
+    axiosInstance.post('/employees/profile/picture', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    }),
   
   // HR endpoints
   getAllEmployees: () => axiosInstance.get('/hr/employees'),

@@ -1,5 +1,13 @@
 import React, { useState } from 'react';
-import { DocumentArrowUpIcon, CheckCircleIcon, ClockIcon, DocumentTextIcon, VideoCameraIcon, UserGroupIcon } from '@heroicons/react/24/outline';
+import { 
+  DocumentArrowUpIcon, 
+  CheckCircleIcon, 
+  ClockIcon, 
+  DocumentTextIcon, 
+  VideoCameraIcon, 
+  UserGroupIcon,
+  CalendarIcon
+} from '@heroicons/react/24/outline';
 import DocumentUpload from './DocumentUpload';
 
 const TaskCard = ({ task, onStatusUpdate }) => {
@@ -17,18 +25,18 @@ const TaskCard = ({ task, onStatusUpdate }) => {
 
   const getStatusColor = () => {
     switch (task.status) {
-      case 'completed': return 'text-green-600 bg-green-50';
-      case 'in_progress': return 'text-blue-600 bg-blue-50';
-      case 'pending': return 'text-gray-600 bg-gray-50';
-      default: return 'text-gray-600 bg-gray-50';
+      case 'completed': return 'bg-emerald-500';
+      case 'in_progress': return 'bg-blue-500';
+      case 'pending': return 'bg-amber-500';
+      default: return 'bg-gray-500';
     }
   };
 
   const getStatusIcon = () => {
     if (task.status === 'completed') {
-      return <CheckCircleIcon className="h-5 w-5 text-green-500" />;
+      return <CheckCircleIcon className="h-5 w-5 text-emerald-500" />;
     }
-    return <ClockIcon className="h-5 w-5 text-gray-400" />;
+    return <ClockIcon className="h-5 w-5 text-amber-400" />;
   };
 
   const handleComplete = () => {
@@ -45,47 +53,78 @@ const TaskCard = ({ task, onStatusUpdate }) => {
   };
 
   const Icon = getTaskIcon();
+  const isCompleted = task.status === 'completed';
 
   return (
-    <div className="px-6 py-4 hover:bg-gray-50 transition-colors">
-      <div className="flex items-start justify-between">
-        <div className="flex items-start space-x-3">
-          <div className={`p-2 rounded-lg ${getStatusColor()}`}>
-            <Icon className="h-5 w-5" />
+    <div className="task-item px-6 py-4 hover:bg-gradient-to-r hover:from-indigo-50/50 hover:to-purple-50/50">
+      <style>{`
+        .task-item {
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .task-item:hover {
+          transform: translateX(4px);
+        }
+      `}</style>
+
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-start gap-4 flex-1">
+          {/* Task Icon */}
+          <div className={`p-3 rounded-xl ${getStatusColor()} bg-opacity-10`}>
+            <Icon className={`h-5 w-5 ${isCompleted ? 'text-emerald-600' : 'text-gray-600'}`} />
           </div>
-          <div className="flex-1">
-            <h3 className="text-sm font-medium text-gray-900">{task.title}</h3>
-            <p className="mt-1 text-sm text-gray-600">{task.description}</p>
-            {task.dueDate && (
-              <p className="mt-1 text-xs text-gray-500">
-                Due: {new Date(task.dueDate).toLocaleDateString()}
-              </p>
-            )}
-            {task.completedDate && (
-              <p className="mt-1 text-xs text-green-600">
-                Completed: {new Date(task.completedDate).toLocaleDateString()}
-              </p>
-            )}
+          
+          {/* Task Details */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <div className={`w-2 h-2 rounded-full ${getStatusColor()}`}></div>
+              <h3 className={`text-sm font-semibold ${isCompleted ? 'text-gray-500 line-through' : 'text-gray-900'}`}>
+                {task.title}
+              </h3>
+            </div>
+            <p className="text-sm text-gray-600 mb-2">{task.description}</p>
+            
+            {/* Task Metadata */}
+            <div className="flex flex-wrap gap-3 text-xs text-gray-500">
+              {task.dueDate && (
+                <span className="flex items-center gap-1">
+                  <CalendarIcon className="h-3.5 w-3.5" />
+                  Due: {new Date(task.dueDate).toLocaleDateString()}
+                </span>
+              )}
+              {task.completedDate && (
+                <span className="flex items-center gap-1 text-emerald-600">
+                  <CheckCircleIcon className="h-3.5 w-3.5" />
+                  Completed: {new Date(task.completedDate).toLocaleDateString()}
+                </span>
+              )}
+            </div>
           </div>
         </div>
-        
-        <div className="flex items-center space-x-3">
-          <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor().replace('bg-', 'bg-').replace('text-', 'text-')}`}>
-            {task.status.replace('_', ' ')}
+
+        {/* Status and Action */}
+        <div className="flex items-center gap-3">
+          <span className={`px-3 py-1 text-xs font-medium rounded-lg ${
+            task.status === 'completed' 
+              ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+              : task.status === 'in_progress'
+              ? 'bg-blue-100 text-blue-700 border border-blue-200'
+              : 'bg-amber-100 text-amber-700 border border-amber-200'
+          }`}>
+            {task.status === 'in_progress' ? 'In Progress' : task.status === 'completed' ? 'Completed' : 'Pending'}
           </span>
-          {getStatusIcon()}
           
-          {task.status !== 'completed' && (
+          {!isCompleted && (
             <button
               onClick={handleComplete}
-              className="px-3 py-1 text-sm font-medium text-primary-600 hover:text-primary-700"
+              className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-indigo-500 to-purple-600 rounded-lg hover:shadow-lg transition-all"
             >
-              {task.type === 'upload' ? 'Upload' : 'Mark Complete'}
+              {task.type === 'upload' ? 'Upload' : 'Complete'}
             </button>
           )}
         </div>
       </div>
 
+      {/* Document Upload Section */}
       {showUpload && (
         <div className="mt-4 ml-11">
           <DocumentUpload
