@@ -2,7 +2,6 @@ import axios from 'axios';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api/v1';
 
-// Create axios instance
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
@@ -11,7 +10,6 @@ const api = axios.create({
   timeout: 10000,
 });
 
-// Add auth token to requests
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
@@ -19,7 +17,6 @@ api.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
     
-    // DEBUG: Log outgoing requests
     console.log('API Request:', {
       method: config.method.toUpperCase(),
       url: config.url,
@@ -35,10 +32,8 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor for error handling
 api.interceptors.response.use(
   (response) => {
-    // DEBUG: Log successful responses
     console.log('API Success:', {
       url: response.config.url,
       status: response.status,
@@ -47,13 +42,11 @@ api.interceptors.response.use(
     return response;
   },
   (error) => {
-    // ENHANCED ERROR LOGGING
     const errorDetails = {
       url: error.config?.url,
       method: error.config?.method,
       status: error.response?.status,
       message: error.response?.data?.message || error.message,
-      // IMPORTANT: Show validation errors
       errors: error.response?.data?.errors || null,
       validationErrors: error.response?.data?.validationErrors || null,
       data: error.response?.data || null,
@@ -61,7 +54,6 @@ api.interceptors.response.use(
     
     console.error('API Error:', errorDetails);
     
-    // Show detailed validation errors in console
     if (error.response?.status === 400 && error.response?.data?.errors) {
       console.error('Validation Errors:', error.response.data.errors);
     }
@@ -86,7 +78,6 @@ export const templateAPI = {
   },
   
   create: (data) => {
-    // DEBUG: Log the exact data being sent
     console.log('Creating template with data:', JSON.stringify(data, null, 2));
     return api.post('/templates', data);
   },
@@ -184,5 +175,48 @@ export const employeeTaskAPI = {
     return api.get(`/employee-tasks/${employeeId}/progress`);
   },
 };
+
+// Employee API
+export const employeeAPI = {
+  getAll: (params = {}) => {
+    return api.get('/employees', { params });
+  },
+  
+  getById: (id) => {
+    return api.get(`/employees/${id}`);
+  },
+  
+  create: (data) => {
+    console.log('Creating employee with data:', JSON.stringify(data, null, 2));
+    return api.post('/employees', data);
+  },
+  
+  update: (id, data) => {
+    console.log('Updating employee with data:', JSON.stringify(data, null, 2));
+    return api.put(`/employees/${id}`, data);
+  },
+  
+  delete: (id) => {
+    return api.delete(`/employees/${id}`);
+  },
+  
+  getTasks: (id) => {
+    return api.get(`/employees/${id}/tasks`);
+  },
+  
+  getProgress: (id) => {
+    return api.get(`/employees/${id}/progress`);
+  },
+  
+  sendReminder: (id) => {
+    return api.post(`/employees/${id}/reminder`);
+  },
+  
+  assignTemplate: (id, templateId) => {
+    return api.post(`/employees/${id}/assign-template`, { templateId });
+  },
+};
+
+export const employeeApi = employeeAPI;
 
 export default api;

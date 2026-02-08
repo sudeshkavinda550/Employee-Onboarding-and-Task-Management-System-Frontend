@@ -24,7 +24,6 @@ const TemplateForm = ({ template, onSubmit, onCancel }) => {
     } catch (error) {
       console.error('Error fetching departments:', error);
       toast.error('Failed to load departments');
-      // Fallback to empty array so form still works
       setDepartments([]);
     } finally {
       setLoadingDepartments(false);
@@ -47,7 +46,7 @@ const TemplateForm = ({ template, onSubmit, onCancel }) => {
         .max(1000, 'Description must not exceed 1000 characters'),
       department_id: Yup.string()
         .test('is-uuid-or-empty', 'Invalid department', function(value) {
-          if (!value) return true; // Optional field
+          if (!value) return true; 
           // Check if it's a valid UUID
           const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
           return uuidRegex.test(value);
@@ -66,12 +65,7 @@ const TemplateForm = ({ template, onSubmit, onCancel }) => {
     },
   });
 
-  /**
-   * Clean form data before submission
-   * - Removes invalid UUIDs
-   * - Formats tasks properly
-   * - Removes null/undefined values
-   */
+
   const cleanFormData = (values, tasksList) => {
     const cleaned = {
       name: values.name?.trim(),

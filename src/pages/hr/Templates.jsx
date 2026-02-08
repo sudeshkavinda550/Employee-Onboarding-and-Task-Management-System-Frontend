@@ -5,6 +5,7 @@ import { toast } from 'react-hot-toast';
 import TemplateForm from '../../components/hr/TemplateForm';
 import TemplateList from '../../components/hr/TemplateList';
 import TemplatePreview from '../../components/hr/TemplatePreview';
+import AssignEmployeeModal from '../../components/hr/AssignEmployeeModal';
 import { templateAPI } from '../../services/api';
 
 const Templates = () => {
@@ -12,8 +13,11 @@ const Templates = () => {
   const [templates, setTemplates] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [showAssignModal, setShowAssignModal] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState(null);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [employees, setEmployees] = useState([]); 
+  const [loadingEmployees, setLoadingEmployees] = useState(false); 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -47,6 +51,20 @@ const Templates = () => {
       toast.error(errorMessage);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchEmployees = async () => {
+    try {
+      setLoadingEmployees(true);
+      const response = await templateAPI.getEmployeesForAssignment();
+      setEmployees(response.data?.data || response.data || []);
+    } catch (error) {
+      console.error('Error fetching employees:', error);
+      toast.error('Failed to load employees');
+      setEmployees([]);
+    } finally {
+      setLoadingEmployees(false);
     }
   };
 
@@ -117,7 +135,6 @@ const Templates = () => {
     } catch (error) {
       console.error('Error saving template:', error);
       
-      // ENHANCED ERROR HANDLING with validation details
       let errorMessage = 'Failed to save template';
       
       if (!error.response) {
@@ -125,15 +142,12 @@ const Templates = () => {
       } else if (error.response.status === 404) {
         errorMessage = 'API endpoint not found. Please check backend configuration.';
       } else if (error.response.status === 400) {
-        // Handle validation errors
         const data = error.response.data;
         
         if (data.errors && Array.isArray(data.errors)) {
-          // express-validator format
           errorMessage = 'Validation errors:\n' + 
             data.errors.map(err => `• ${err.path || err.param}: ${err.msg}`).join('\n');
           
-          // Show each error as a separate toast
           data.errors.forEach(err => {
             toast.error(`${err.path || err.param}: ${err.msg}`, { duration: 5000 });
           });
@@ -150,7 +164,6 @@ const Templates = () => {
       
       toast.error(errorMessage, { duration: 6000 });
       
-      // Log the full error for debugging
       console.error('Form Data:', formData);
       console.error('Full Error:', {
         status: error.response?.status,
@@ -173,15 +186,34 @@ const Templates = () => {
     }
   };
 
-  const handleAssign = (template) => {
-    navigate(`/hr/templates/${template.id}/assign`);
+  const handleAssign = async (template) => {
+    setSelectedTemplate(template);
+    setShowAssignModal(true);
+    await fetchEmployees();
   };
 
-  const handleAssignFromPreview = () => {
+  const handleAssignFromPreview = async () => {
     if (selectedTemplate) {
       setShowPreview(false);
-      navigate(`/hr/templates/${selectedTemplate.id}/assign`);
+      setShowAssignModal(true);
+      await fetchEmployees();
     }
+  };
+
+  const handleAssignToEmployee = async (employeeId) => {
+    try {
+      await templateAPI.assignToEmployee(selectedTemplate.id, employeeId);
+      toast.success('Template assigned successfully');
+    } catch (error) {
+      console.error('Error assigning template:', error);
+      toast.error('Failed to assign template');
+      throw error;
+    }
+  };
+
+  const handleCloseAssignModal = () => {
+    setShowAssignModal(false);
+    setSelectedTemplate(null);
   };
 
   if (loading) {
@@ -284,6 +316,17 @@ const Templates = () => {
               setSelectedTemplate(null);
             }}
             onAssign={handleAssignFromPreview}
+          />
+        )}
+
+        {/* Assign Modal */}
+        {showAssignModal && selectedTemplate && (
+          <AssignEmployeeModal
+            template={selectedTemplate}
+            employees={employees}
+            loading={loadingEmployees}
+            onAssign={handleAssignToEmployee}
+            onClose={handleCloseAssignModal}
           />
         )}
 
