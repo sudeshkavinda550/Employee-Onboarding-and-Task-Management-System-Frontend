@@ -67,7 +67,38 @@ api.interceptors.response.use(
   }
 );
 
-// Template API
+export const analyticsApi = {
+  getDashboardStats: async () => {
+    try {
+      const response = await api.get('/analytics/dashboard-stats');
+      return { data: response.data };
+    } catch (error) {
+      console.error('Error fetching dashboard stats:', error);
+      throw error;
+    }
+  },
+
+  getDepartmentCompletion: async () => {
+    try {
+      const response = await api.get('/analytics/department-completion');
+      return { data: response.data };
+    } catch (error) {
+      console.error('Error fetching department completion:', error);
+      throw error;
+    }
+  },
+
+  getTaskStatusDistribution: async () => {
+    try {
+      const response = await api.get('/analytics/task-status');
+      return { data: response.data };
+    } catch (error) {
+      console.error('Error fetching task status distribution:', error);
+      throw error;
+    }
+  },
+};
+
 export const templateAPI = {
   getAll: (params = {}) => {
     return api.get('/templates', { params });
@@ -83,7 +114,7 @@ export const templateAPI = {
   },
   
   update: (id, data) => {
-    console.log('🔧 Updating template with data:', JSON.stringify(data, null, 2));
+    console.log('Updating template with data:', JSON.stringify(data, null, 2));
     return api.put(`/templates/${id}`, data);
   },
   
@@ -120,7 +151,6 @@ export const templateAPI = {
   },
 };
 
-// Document API
 export const documentAPI = {
   upload: (formData) => {
     return api.post('/documents/upload', formData, {
@@ -153,7 +183,6 @@ export const documentAPI = {
   },
 };
 
-// Employee Task API
 export const employeeTaskAPI = {
   getMyTasks: () => {
     return api.get('/employee-tasks/my-tasks');
@@ -176,7 +205,6 @@ export const employeeTaskAPI = {
   },
 };
 
-// Employee API
 export const employeeAPI = {
   getAll: (params = {}) => {
     return api.get('/employees', { params });

@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import authApi from '../../api/authApi';
+import { taskApi } from '../../api/taskApi';
 import { 
   EnvelopeIcon, 
   PhoneIcon, 
@@ -10,12 +12,20 @@ import {
   UserCircleIcon,
   CheckCircleIcon,
   PencilSquareIcon,
-  XMarkIcon
+  XMarkIcon,
+  ArrowLeftIcon
 } from '@heroicons/react/24/outline';
 import { toast } from 'react-toastify';
 import ProfileForm from '../../components/profile/ProfileForm';
 
 const Profile = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  
+  const taskId = location.state?.taskId;
+  const taskTitle = location.state?.taskTitle;
+  const returnTo = location.state?.returnTo || '/employee/tasks';
+
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -64,7 +74,6 @@ const Profile = () => {
     try {
       setUpdating(true);
       
-      // Only send fields that are actually provided and not empty
       const backendData = {};
       
       if (data.name && data.name.trim()) {
@@ -83,7 +92,6 @@ const Profile = () => {
         backendData.address = data.address.trim();
       }
       
-      // Employment fields
       if (data.position && data.position.trim()) {
         backendData.position = data.position.trim();
       }
@@ -92,7 +100,6 @@ const Profile = () => {
         backendData.start_date = data.startDate;
       }
       
-      // Emergency contact fields - only send if provided
       if (data.emergencyContactName && data.emergencyContactName.trim()) {
         backendData.emergency_contact_name = data.emergencyContactName.trim();
       }
@@ -105,19 +112,36 @@ const Profile = () => {
         backendData.emergency_contact_relation = data.emergencyContactRelation.trim();
       }
       
-      // Check if at least one field is being updated
       if (Object.keys(backendData).length === 0) {
         toast.warning('Please update at least one field');
         setUpdating(false);
         return;
       }
       
-      console.log('Sending update data:', backendData);
-      
       await authApi.updateProfile(backendData);
       await fetchProfile();
       setEditing(false);
       toast.success('Profile updated successfully');
+
+      if (taskId) {
+        const shouldComplete = window.confirm(
+          '✅ Profile updated successfully!\n\nWould you like to mark this task as complete?'
+        );
+
+        if (shouldComplete) {
+          try {
+            await taskApi.updateTaskStatus(taskId, { status: 'completed' });
+            setTimeout(() => {
+              navigate(returnTo, {
+                state: { successMessage: 'Profile updated and task completed!' }
+              });
+            }, 500);
+          } catch (error) {
+            console.error('Error marking task complete:', error);
+            toast.warning('Profile saved but failed to mark task as complete. You can mark it manually from the tasks page.');
+          }
+        }
+      }
     } catch (error) {
       console.error('Error updating profile:', error);
       const errorMessage = error.response?.data?.message || 'Failed to update profile';
@@ -129,26 +153,56 @@ const Profile = () => {
 
   const handleProfilePictureUpload = async (file) => {
     try {
-      const formData = new FormData();
-      formData.append('profilePicture', file);
+      const response = await authApi.uploadProfilePicture(file);
       
-      // Call the profile picture upload endpoint
-      const response = await authApi.uploadProfilePicture(formData);
-      
-      // Update the user state with the new profile picture
       if (response?.data?.profile_picture) {
         setUser(prev => ({
           ...prev,
           profilePicture: response.data.profile_picture
         }));
         toast.success('Profile picture uploaded successfully');
+        await fetchProfile();
       }
       
       return response?.data?.profile_picture;
     } catch (error) {
-      console.error('Error uploading profile picture:', error);
-      toast.error('Failed to upload profile picture');
+      const errorMsg = error.response?.data?.message || error.response?.data?.error || 'Failed to upload profile picture';
+      toast.error(errorMsg);
       throw error;
+    }
+  };
+
+  const handleBackToTasks = () => {
+    if (taskId) {
+      const shouldGoBack = window.confirm(
+        'You have not completed this task yet. Do you want to go back to tasks?'
+      );
+      
+      if (shouldGoBack) {
+        navigate(returnTo);
+      }
+    } else {
+      navigate(returnTo);
+    }
+  };
+
+  const handleMarkTaskComplete = async () => {
+    if (!taskId) return;
+
+    const confirmed = window.confirm(
+      'Are you sure you want to mark this task as complete?'
+    );
+
+    if (confirmed) {
+      try {
+        await taskApi.updateTaskStatus(taskId, { status: 'completed' });
+        navigate(returnTo, {
+          state: { successMessage: 'Task marked as complete!' }
+        });
+      } catch (error) {
+        console.error('Error marking task complete:', error);
+        toast.error('Failed to mark task as complete. Please try again.');
+      }
     }
   };
 
@@ -190,6 +244,28 @@ const Profile = () => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 w-full">
         <div className="px-6 py-6 space-y-6 max-w-[1600px] mx-auto">
+          {taskId && (
+            <div className="mb-6 p-4 bg-blue-50 border-l-4 border-blue-500 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-blue-800">
+                    📋 Active Task
+                  </p>
+                  <p className="text-lg font-semibold text-blue-900 mt-1">
+                    {taskTitle}
+                  </p>
+                </div>
+                <button
+                  onClick={handleBackToTasks}
+                  className="inline-flex items-center gap-2 px-3 py-2 text-sm text-blue-700 hover:text-blue-800 hover:bg-blue-100 rounded-lg transition-colors"
+                >
+                  <ArrowLeftIcon className="h-4 w-4" />
+                  Back to Tasks
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="flex justify-between items-center">
             <div>
               <h1 className="text-4xl font-bold text-gray-900 mb-2 tracking-tight">
@@ -199,14 +275,25 @@ const Profile = () => {
                 Update your personal information
               </p>
             </div>
-            <button
-              onClick={() => setEditing(false)}
-              className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-all flex items-center gap-2"
-              disabled={updating}
-            >
-              <XMarkIcon className="h-5 w-5" />
-              Cancel
-            </button>
+            <div className="flex gap-3">
+              {taskId && (
+                <button
+                  onClick={handleMarkTaskComplete}
+                  className="px-6 py-3 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition-all flex items-center gap-2"
+                >
+                  <CheckCircleIcon className="h-5 w-5" />
+                  Mark Complete
+                </button>
+              )}
+              <button
+                onClick={() => setEditing(false)}
+                className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-all flex items-center gap-2"
+                disabled={updating}
+              >
+                <XMarkIcon className="h-5 w-5" />
+                Cancel
+              </button>
+            </div>
           </div>
           <ProfileForm
             user={user}
@@ -230,7 +317,28 @@ const Profile = () => {
       `}</style>
 
       <div className="px-6 py-6 space-y-6 max-w-[1600px] mx-auto">
-        {/* Header */}
+        {taskId && (
+          <div className="mb-6 p-4 bg-blue-50 border-l-4 border-blue-500 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-blue-800">
+                  📋 Active Task
+                </p>
+                <p className="text-lg font-semibold text-blue-900 mt-1">
+                  {taskTitle}
+                </p>
+              </div>
+              <button
+                onClick={handleBackToTasks}
+                className="inline-flex items-center gap-2 px-3 py-2 text-sm text-blue-700 hover:text-blue-800 hover:bg-blue-100 rounded-lg transition-colors"
+              >
+                <ArrowLeftIcon className="h-4 w-4" />
+                Back to Tasks
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-4xl font-bold text-gray-900 mb-2 tracking-tight">
@@ -240,16 +348,26 @@ const Profile = () => {
               View and manage your personal information
             </p>
           </div>
-          <button
-            onClick={() => setEditing(true)}
-            className="px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl font-medium shadow-lg hover:shadow-xl transition-all flex items-center gap-2"
-          >
-            <PencilSquareIcon className="h-5 w-5" />
-            Edit Profile
-          </button>
+          <div className="flex gap-3">
+            {taskId && (
+              <button
+                onClick={handleMarkTaskComplete}
+                className="px-6 py-3 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition-all flex items-center gap-2"
+              >
+                <CheckCircleIcon className="h-5 w-5" />
+                Mark Complete
+              </button>
+            )}
+            <button
+              onClick={() => setEditing(true)}
+              className="px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl font-medium shadow-lg hover:shadow-xl transition-all flex items-center gap-2"
+            >
+              <PencilSquareIcon className="h-5 w-5" />
+              Edit Profile
+            </button>
+          </div>
         </div>
 
-        {/* Profile Header Card */}
         <div 
           className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm border border-gray-100 overflow-hidden"
           style={{ animation: 'slideUp 0.6s ease-out' }}
@@ -291,9 +409,7 @@ const Profile = () => {
           </div>
         </div>
 
-        {/* Info Sections */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Personal Information */}
           <div 
             className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm border border-gray-100 p-6"
             style={{ animation: 'slideUp 0.6s ease-out', animationDelay: '100ms', opacity: 0, animationFillMode: 'forwards' }}
@@ -313,7 +429,6 @@ const Profile = () => {
             </div>
           </div>
 
-          {/* Employment Details */}
           <div 
             className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm border border-gray-100 p-6"
             style={{ animation: 'slideUp 0.6s ease-out', animationDelay: '200ms', opacity: 0, animationFillMode: 'forwards' }}
@@ -344,7 +459,6 @@ const Profile = () => {
           </div>
         </div>
 
-        {/* Emergency Contact */}
         <div 
           className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm border border-gray-100 p-6"
           style={{ animation: 'slideUp 0.6s ease-out', animationDelay: '300ms', opacity: 0, animationFillMode: 'forwards' }}
@@ -362,7 +476,6 @@ const Profile = () => {
           </div>
         </div>
 
-        {/* Onboarding Progress */}
         {user?.onboardingProgress && user.onboardingProgress.total > 0 && (
           <div 
             className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm border border-gray-100 p-6"

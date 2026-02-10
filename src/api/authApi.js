@@ -9,7 +9,6 @@ const api = axios.create({
   },
 });
 
-// Token interceptor
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
@@ -68,13 +67,22 @@ const authApi = {
     return response.data;
   },
 
-  // Profile picture methods
-  uploadProfilePicture: async (formData) => {
-    const response = await api.post('/auth/profile/picture', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+  uploadProfilePicture: async (file) => {
+    const formData = new FormData();
+    formData.append('profile_picture', file);
+    
+    const token = localStorage.getItem('token');
+    
+    const response = await axios.post(
+      `${API_BASE_URL}/auth/profile/picture`,
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          'Authorization': `Bearer ${token}`,
+        },
+      }
+    );
     return response.data;
   },
 

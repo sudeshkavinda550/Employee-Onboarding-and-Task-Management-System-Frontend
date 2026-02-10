@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { 
   HomeIcon, 
@@ -11,12 +11,36 @@ import {
   UserIcon,
   ChevronRightIcon,
   Bars3Icon,
-  XMarkIcon
+  XMarkIcon,
+  ArrowRightOnRectangleIcon,
+  ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
 
 const Sidebar = () => {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate('/login');
+      setIsMobileMenuOpen(false);
+    } catch (error) {
+      console.error('Logout failed:', error);
+    } finally {
+      setShowLogoutConfirm(false);
+    }
+  };
+
+  const confirmLogout = () => {
+    setShowLogoutConfirm(true);
+  };
+
+  const cancelLogout = () => {
+    setShowLogoutConfirm(false);
+  };
 
   const employeeNav = [
     { name: 'Dashboard', href: '/employee/dashboard', icon: HomeIcon, gradient: 'from-indigo-500 to-purple-500' },
@@ -106,7 +130,6 @@ const Sidebar = () => {
         }
       `}</style>
 
-      {/* Mobile menu button */}
       <button
         onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
         className="md:hidden fixed top-4 left-4 z-50 p-2 bg-white rounded-xl shadow-lg border border-gray-200"
@@ -118,12 +141,41 @@ const Sidebar = () => {
         )}
       </button>
 
-      {/* Mobile backdrop */}
       {isMobileMenuOpen && (
         <div 
           className="md:hidden fixed inset-0 bg-gray-900 bg-opacity-50 z-30 backdrop-blur-sm"
           onClick={() => setIsMobileMenuOpen(false)}
         />
+      )}
+
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
+          <div className="bg-gray-900 rounded-2xl border border-white/10 p-6 mx-4 max-w-md w-full shadow-2xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-red-500/20 rounded-lg">
+                <ExclamationTriangleIcon className="h-6 w-6 text-red-400" />
+              </div>
+              <h3 className="text-lg font-bold text-white">Confirm Logout</h3>
+            </div>
+            <p className="text-gray-300 mb-6">
+              Are you sure you want to log out? You will need to log in again to access your account.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={cancelLogout}
+                className="flex-1 px-4 py-2.5 text-sm font-medium rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 transition-colors border border-white/10"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleLogout}
+                className="flex-1 px-4 py-2.5 text-sm font-medium rounded-lg bg-gradient-to-r from-red-500 to-red-600 text-white hover:from-red-600 hover:to-red-700 transition-all shadow-lg"
+              >
+                Log Out
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       <div className={`
@@ -132,7 +184,6 @@ const Sidebar = () => {
         ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         <div className="flex flex-col h-full bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
-          {/* Logo & Brand */}
           <div className="flex-shrink-0 px-6 py-6">
             <div className="flex items-center gap-3">
               <div className="relative">
@@ -148,7 +199,6 @@ const Sidebar = () => {
             </div>
           </div>
 
-          {/* User Info Card */}
           <div className="flex-shrink-0 mx-4 mb-6 p-4 bg-gradient-to-br from-indigo-500/10 to-purple-500/10 rounded-2xl border border-white/10 backdrop-blur-sm">
             <div className="flex items-center gap-3">
               <div className="relative">
@@ -213,7 +263,21 @@ const Sidebar = () => {
             </nav>
           </div>
 
-          <div className="flex-shrink-0 p-4 border-t border-white/10">
+          <div className="flex-shrink-0 p-4 space-y-3">
+            <button
+              onClick={confirmLogout}
+              className="nav-item group flex items-center justify-between w-full px-4 py-3.5 text-sm font-medium rounded-xl transition-all duration-300 nav-gradient-hover text-red-300 hover:text-red-100 hover:bg-red-500/10 border border-white/5"
+              style={{ animationDelay: '250ms' }}
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-1.5 rounded-lg transition-all duration-300 bg-red-500/10 group-hover:bg-red-500/20">
+                  <ArrowRightOnRectangleIcon className="h-5 w-5 transition-transform duration-300 group-hover:scale-110" />
+                </div>
+                <span className="font-medium">Logout</span>
+              </div>
+              <ChevronRightIcon className="h-4 w-4 transition-all duration-300 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0" />
+            </button>
+            
             <div className="px-4 py-3 bg-gradient-to-r from-indigo-500/10 to-purple-500/10 rounded-xl border border-white/5">
               <div className="flex items-center gap-2 text-xs text-gray-400">
                 <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>

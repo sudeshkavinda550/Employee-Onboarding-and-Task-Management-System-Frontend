@@ -63,7 +63,7 @@ const Home = () => {
                   onClick={handleSignIn}
                   className="text-gray-700 hover:text-blue-600 font-medium px-4 py-2 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
                 >
-                  Sign In
+                  Log In
                 </button>
                 <button 
                   onClick={handleGetStarted}
@@ -105,20 +105,7 @@ const Home = () => {
               <p className="text-xl text-white text-opacity-90 mb-8 leading-relaxed" style={{ fontFamily: 'Georgia, serif' }}>
                 OnboardPro is a comprehensive employee onboarding platform that streamlines task management, document handling, and progress tracking. Connect new hires with personalized checklists and empower HR teams with powerful analytics and automation.
               </p>
-              <div className="flex flex-wrap gap-4">
-                <button 
-                  onClick={handleGetStarted}
-                  className="bg-green-600 text-white px-8 py-3 rounded-lg hover:bg-green-700 font-medium shadow-lg transition-all"
-                >
-                  Start Chat
-                </button>
-                <button 
-                  onClick={handleSignIn}
-                  className="bg-white text-gray-700 px-8 py-3 rounded-lg hover:bg-gray-50 font-medium border border-gray-200 transition-all"
-                >
-                  Sign In
-                </button>
-              </div>
+              
             </div>
           </div>
         </div>

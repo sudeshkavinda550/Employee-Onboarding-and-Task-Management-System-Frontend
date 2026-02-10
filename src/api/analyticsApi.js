@@ -1,7 +1,13 @@
-import axios from "./axios";
+import axiosInstance from './axios';
 
 export const analyticsApi = {
-  getOverview: () => axios.get("/analytics/overview"),
-  getEmployeeStats: () => axios.get("/analytics/employees"),
-  getTaskStats: () => axios.get("/analytics/tasks"),
+  getOverview: () => axiosInstance.get("/analytics/overview"),
+  getEmployeeStats: () => axiosInstance.get("/analytics/employees"),
+  getTaskStats: () => axiosInstance.get("/analytics/tasks"),
+  
+  getDashboardStats: () => axiosInstance.get("/analytics/dashboard/stats"),
+  
+  getDepartmentCompletion: () => axiosInstance.get("/analytics/department/completion"),
+  
+  getTaskStatusDistribution: () => axiosInstance.get("/analytics/tasks/status-distribution"),
 };

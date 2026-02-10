@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { useFormik } from 'formik';
 import * as Yup from 'yup';
-import { PhotoIcon, XMarkIcon, CloudArrowUpIcon } from '@heroicons/react/24/outline';
+import { PhotoIcon, CloudArrowUpIcon } from '@heroicons/react/24/outline';
 
 const ProfileForm = ({ user, onSubmit, onCancel, onProfilePictureUpload, isLoading }) => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(user?.profilePicture || '');
   const [uploadingPicture, setUploadingPicture] = useState(false);
+  const [uploadError, setUploadError] = useState('');
 
   const formik = useFormik({
     initialValues: {
@@ -31,45 +32,81 @@ const ProfileForm = ({ user, onSubmit, onCancel, onProfilePictureUpload, isLoadi
       emergencyContactRelation: Yup.string(),
     }),
     onSubmit: async (values) => {
-      // First upload profile picture if selected
+      setUploadError('');
+      
       if (selectedFile && onProfilePictureUpload) {
         try {
           setUploadingPicture(true);
           await onProfilePictureUpload(selectedFile);
         } catch (error) {
           console.error('Error uploading profile picture:', error);
-          return; // Don't submit the form if picture upload fails
+          
+          let errorMessage = 'Failed to upload profile picture. ';
+          
+          if (error.response) {
+            const status = error.response.status;
+            const serverMessage = error.response.data?.message || error.response.data?.error;
+            
+            switch (status) {
+              case 400:
+                errorMessage += serverMessage || 'Invalid file format or size. Please check the file and try again.';
+                break;
+              case 401:
+                errorMessage += 'Your session has expired. Please log in again.';
+                break;
+              case 413:
+                errorMessage += 'File is too large. Please select a smaller image.';
+                break;
+              case 415:
+                errorMessage += 'Unsupported file type. Please use JPEG, PNG, GIF, or WebP.';
+                break;
+              default:
+                errorMessage += serverMessage || 'An unexpected error occurred. Please try again.';
+            }
+          } else if (error.request) {
+            errorMessage += 'Network error. Please check your internet connection and try again.';
+          } else {
+            errorMessage += error.message || 'An unexpected error occurred.';
+          }
+          
+          setUploadError(errorMessage);
+          return; 
         } finally {
           setUploadingPicture(false);
         }
       }
       
-      // Then submit the form data
       onSubmit(values);
     },
   });
 
   const handleFileChange = (event) => {
     const file = event.target.files[0];
+    setUploadError(''); 
+    
     if (file) {
-      // Check file type
-      if (!file.type.match('image.*')) {
-        alert('Please select an image file');
+      const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+      if (!validTypes.includes(file.type)) {
+        setUploadError('Please select a valid image file (JPEG, PNG, GIF, or WebP)');
+        event.target.value = ''; 
         return;
       }
       
-      // Check file size (max 2MB)
-      if (file.size > 2 * 1024 * 1024) {
-        alert('File size must be less than 2MB');
+      const maxSize = 2 * 1024 * 1024; 
+      if (file.size > maxSize) {
+        setUploadError('File size must be less than 2MB. Please select a smaller image.');
+        event.target.value = ''; 
         return;
       }
       
       setSelectedFile(file);
       
-      // Create preview URL
       const reader = new FileReader();
       reader.onloadend = () => {
         setPreviewUrl(reader.result);
+      };
+      reader.onerror = () => {
+        setUploadError('Failed to read the file. Please try again.');
       };
       reader.readAsDataURL(file);
     }
@@ -77,7 +114,8 @@ const ProfileForm = ({ user, onSubmit, onCancel, onProfilePictureUpload, isLoadi
 
   const handleRemovePicture = () => {
     setSelectedFile(null);
-    setPreviewUrl('');
+    setPreviewUrl(user?.profilePicture || '');
+    setUploadError('');
   };
 
   return (
@@ -103,17 +141,19 @@ const ProfileForm = ({ user, onSubmit, onCancel, onProfilePictureUpload, isLoadi
               )}
             </div>
           </div>
-          <div className="space-y-3">
+          <div className="space-y-3 flex-1">
             <div>
               <label className="relative cursor-pointer">
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
                   className="hidden"
                   onChange={handleFileChange}
-                  disabled={uploadingPicture}
+                  disabled={uploadingPicture || isLoading}
                 />
-                <div className="px-5 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl hover:shadow-lg transition-all flex items-center gap-2 w-fit">
+                <div className={`px-5 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl hover:shadow-lg transition-all flex items-center gap-2 w-fit ${
+                  (uploadingPicture || isLoading) ? 'opacity-50 cursor-not-allowed' : ''
+                }`}>
                   <CloudArrowUpIcon className="h-4 w-4" />
                   {selectedFile ? 'Change Photo' : 'Upload Photo'}
                 </div>
@@ -122,16 +162,25 @@ const ProfileForm = ({ user, onSubmit, onCancel, onProfilePictureUpload, isLoadi
                 <button
                   type="button"
                   onClick={handleRemovePicture}
-                  className="ml-3 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all"
-                  disabled={uploadingPicture}
+                  className="ml-3 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={uploadingPicture || isLoading}
                 >
                   Remove
                 </button>
               )}
             </div>
             <p className="text-xs text-gray-500">
-              JPG, PNG up to 2MB. {uploadingPicture && 'Uploading...'}
+              JPG, PNG, GIF, or WebP up to 2MB
+              {uploadingPicture && <span className="text-indigo-600 font-medium"> • Uploading...</span>}
             </p>
+            {uploadError && (
+              <div className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
+                <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+                <span>{uploadError}</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -245,7 +294,6 @@ const ProfileForm = ({ user, onSubmit, onCancel, onProfilePictureUpload, isLoadi
                 <p className="mt-1.5 text-sm text-red-600">{formik.errors.startDate}</p>
               )}
             </div>
-            
           </div>
         </div>
 
@@ -338,7 +386,7 @@ const ProfileForm = ({ user, onSubmit, onCancel, onProfilePictureUpload, isLoadi
             <button
               type="button"
               onClick={onCancel}
-              className="px-6 py-3 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-all"
+              className="px-6 py-3 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={isLoading || uploadingPicture}
             >
               Cancel
