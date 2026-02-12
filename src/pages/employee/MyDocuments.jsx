@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { documentApi } from '../../api';
-import { taskApi } from '../../api/taskApi';
+import { documentApi, taskApi } from '../../api';
 import { 
   DocumentArrowUpIcon, 
   CheckCircleIcon, 
@@ -11,9 +10,9 @@ import {
   TrashIcon,
   EyeIcon,
   FolderIcon,
-  ArrowTrendingUpIcon,
   ArrowLeftIcon,
-  XMarkIcon
+  XMarkIcon,
+  ExclamationCircleIcon
 } from '@heroicons/react/24/outline';
 import { toast } from 'react-toastify';
 
@@ -35,30 +34,39 @@ const MyDocuments = () => {
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewDocument, setPreviewDocument] = useState(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
+  const [tasks, setTasks] = useState([]);
 
   useEffect(() => {
     fetchDocuments();
+    fetchTasks();
   }, []);
 
   const fetchDocuments = async () => {
     try {
       setLoading(true);
       const response = await documentApi.getMyDocuments();
-      console.log('Full API Response:', response);
-      console.log('Response data:', response.data);
-      
       const documentsData = response.data?.data || response.data;
       setDocuments(Array.isArray(documentsData) ? documentsData : []);
-      
-      console.log('Documents set to state:', documentsData);
-      console.log('Documents length:', documentsData?.length);
     } catch (error) {
       console.error('Error fetching documents:', error);
-      const errorMsg = error.response?.data?.message || 'Failed to fetch documents';
-      toast.error(errorMsg);
+      toast.error('Failed to fetch documents');
       setDocuments([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchTasks = async () => {
+    try {
+      const response = await taskApi.getMyTasks();
+      const tasksData = response.data?.data || response.data;
+      const docTasks = (Array.isArray(tasksData) ? tasksData : []).filter(task => 
+        (task.task_type === 'document_upload' || task.category === 'document_upload') && 
+        task.status !== 'completed'
+      );
+      setTasks(docTasks);
+    } catch (error) {
+      console.error('Error fetching tasks:', error);
     }
   };
 
@@ -119,78 +127,25 @@ const MyDocuments = () => {
       formData.append('document', selectedFile);
       
       if (taskId) {
-        console.log('Task ID being sent:', taskId);
-        console.log('Task ID type:', typeof taskId);
         formData.append('task_id', String(taskId));
-      }
-
-      console.log('FormData entries:');
-      for (let pair of formData.entries()) {
-        console.log(pair[0], pair[1]);
       }
 
       const response = await documentApi.uploadDocument(formData);
       
       if (response && response.data) {
-        toast.success('Document uploaded successfully!');
+        toast.success('Document uploaded successfully! Waiting for HR approval.');
         setShowUploadModal(false);
         setSelectedFile(null);
         setFilePreview(null);
         await fetchDocuments();
-
-        if (taskId) {
-          setTimeout(() => {
-            const shouldComplete = window.confirm(
-              '✅ Document uploaded successfully!\n\nWould you like to mark this task as complete?'
-            );
-
-            if (shouldComplete) {
-              handleMarkTaskComplete();
-            }
-          }, 500);
-        }
+        await fetchTasks();
       }
     } catch (error) {
       console.error('Error uploading document:', error);
-      console.error('Error response:', error.response);
-      
       let errorMsg = 'Failed to upload document';
-      
-      if (error.response) {
-        const status = error.response.status;
-        const serverMessage = error.response.data?.message || error.response.data?.error;
-        const validationErrors = error.response.data?.errors;
-        
-        console.log('Validation errors:', validationErrors);
-        
-        if (validationErrors && Array.isArray(validationErrors)) {
-          errorMsg = validationErrors.map(e => e.message).join(', ');
-        } else {
-          switch (status) {
-            case 400:
-              errorMsg = serverMessage || 'Invalid file or missing required fields';
-              break;
-            case 401:
-              errorMsg = 'Session expired. Please log in again';
-              setTimeout(() => navigate('/login'), 2000);
-              break;
-            case 413:
-              errorMsg = 'File is too large. Maximum size is 10MB';
-              break;
-            case 415:
-              errorMsg = 'Unsupported file type';
-              break;
-            case 500:
-              errorMsg = 'Server error. Please try again later';
-              break;
-            default:
-              errorMsg = serverMessage || errorMsg;
-          }
-        }
-      } else if (error.request) {
-        errorMsg = 'Network error. Please check your connection';
+      if (error.response?.data?.message) {
+        errorMsg = error.response.data.message;
       }
-      
       toast.error(errorMsg);
     } finally {
       setUploading(false);
@@ -214,35 +169,7 @@ const MyDocuments = () => {
       toast.success('Document downloaded successfully');
     } catch (error) {
       console.error('Error downloading document:', error);
-      
-      let errorMsg = 'Failed to download document';
-      
-      if (error.response) {
-        const status = error.response.status;
-        const serverMessage = error.response.data?.message;
-        
-        switch (status) {
-          case 404:
-            errorMsg = 'Document file not found on server';
-            break;
-          case 403:
-            errorMsg = 'You do not have permission to download this document';
-            break;
-          case 401:
-            errorMsg = 'Session expired. Please log in again';
-            setTimeout(() => navigate('/login'), 2000);
-            break;
-          case 500:
-            errorMsg = 'Server error while downloading. Please try again';
-            break;
-          default:
-            errorMsg = serverMessage || errorMsg;
-        }
-      } else if (error.request) {
-        errorMsg = 'Network error. Please check your connection';
-      }
-      
-      toast.error(errorMsg);
+      toast.error('Failed to download document');
     }
   };
 
@@ -254,36 +181,7 @@ const MyDocuments = () => {
         fetchDocuments();
       } catch (error) {
         console.error('Error deleting document:', error);
-        
-        let errorMsg = 'Failed to delete document';
-        
-        if (error.response) {
-          const status = error.response.status;
-          const serverMessage = error.response.data?.message;
-          
-          switch (status) {
-            case 404:
-              errorMsg = 'Document not found';
-              fetchDocuments();
-              break;
-            case 403:
-              errorMsg = 'You do not have permission to delete this document';
-              break;
-            case 401:
-              errorMsg = 'Session expired. Please log in again';
-              setTimeout(() => navigate('/login'), 2000);
-              break;
-            case 500:
-              errorMsg = 'Server error while deleting. Please try again';
-              break;
-            default:
-              errorMsg = serverMessage || errorMsg;
-          }
-        } else if (error.request) {
-          errorMsg = 'Network error. Please check your connection';
-        }
-        
-        toast.error(errorMsg);
+        toast.error('Failed to delete document');
       }
     }
   };
@@ -303,19 +201,9 @@ const MyDocuments = () => {
         previewUrl: url,
         blob: blob
       }));
-      
     } catch (error) {
       console.error('Error loading document preview:', error);
-      
-      let errorMsg = 'Failed to load document preview';
-      
-      if (error.response?.status === 404) {
-        errorMsg = 'Document file not found';
-      } else if (error.response?.status === 403) {
-        errorMsg = 'Access denied';
-      }
-      
-      toast.error(errorMsg);
+      toast.error('Failed to load document preview');
       setShowPreviewModal(false);
     } finally {
       setLoadingPreview(false);
@@ -333,10 +221,7 @@ const MyDocuments = () => {
 
   const handleBackToTasks = () => {
     if (taskId) {
-      const shouldGoBack = window.confirm(
-        'You have not completed this task yet. Do you want to go back to tasks?'
-      );
-      
+      const shouldGoBack = window.confirm('You have not completed this task yet. Do you want to go back to tasks?');
       if (shouldGoBack) {
         navigate(returnTo);
       }
@@ -347,7 +232,6 @@ const MyDocuments = () => {
 
   const handleMarkTaskComplete = async () => {
     if (!taskId) return;
-
     try {
       await taskApi.updateTaskStatus(taskId, { status: 'completed' });
       navigate(returnTo, {
@@ -358,11 +242,6 @@ const MyDocuments = () => {
       toast.error('Failed to mark task as complete');
     }
   };
-
-  const filteredDocuments = Array.isArray(documents) ? documents.filter(doc => {
-    if (filter === 'all') return true;
-    return doc.status === filter;
-  }) : [];
 
   const getStatusIcon = (status) => {
     switch (status) {
@@ -381,6 +260,11 @@ const MyDocuments = () => {
       default: return 'bg-gray-100 text-gray-700 border-gray-200';
     }
   };
+
+  const filteredDocuments = Array.isArray(documents) ? documents.filter(doc => {
+    if (filter === 'all') return true;
+    return doc.status === filter;
+  }) : [];
 
   const stats = {
     total: Array.isArray(documents) ? documents.length : 0,
@@ -412,19 +296,28 @@ const MyDocuments = () => {
       `}</style>
 
       <div className="px-6 py-6 space-y-6 max-w-[1600px] mx-auto">
+        {stats.rejected > 0 && (
+          <div className="bg-red-50 border-l-4 border-red-500 rounded-lg p-4 mb-4">
+            <div className="flex items-start gap-3">
+              <ExclamationCircleIcon className="h-5 w-5 text-red-600 mt-0.5" />
+              <div>
+                <h3 className="text-sm font-semibold text-red-800">Documents Require Re-upload</h3>
+                <p className="text-sm text-red-700 mt-1">
+                  {stats.rejected} document{stats.rejected > 1 ? 's' : ''} {stats.rejected > 1 ? 'have' : 'has'} been rejected. 
+                  Please review the feedback and upload corrected versions.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {taskId && (
           <div className="mb-6 p-4 bg-blue-50 border-l-4 border-blue-500 rounded-lg">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-blue-800">
-                  📋 Active Task
-                </p>
-                <p className="text-lg font-semibold text-blue-900 mt-1">
-                  {taskTitle}
-                </p>
-                <p className="text-xs text-blue-600 mt-1">
-                  Task ID: {taskId}
-                </p>
+                <p className="text-sm font-medium text-blue-800">📋 Active Task</p>
+                <p className="text-lg font-semibold text-blue-900 mt-1">{taskTitle}</p>
+                <p className="text-xs text-blue-600 mt-1">Task ID: {taskId}</p>
               </div>
               <button
                 onClick={handleBackToTasks}
@@ -439,14 +332,9 @@ const MyDocuments = () => {
 
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h1 className="text-4xl font-bold text-gray-900 mb-2 tracking-tight">
-              My Documents 📁
-            </h1>
-            <p className="text-gray-600 text-lg">
-              Upload and manage your onboarding documents
-            </p>
+            <h1 className="text-4xl font-bold text-gray-900 mb-2 tracking-tight">My Documents</h1>
+            <p className="text-gray-600 text-lg">Upload and manage your onboarding documents</p>
           </div>
-          
           <div className="flex gap-3">
             {taskId && (
               <button
@@ -468,8 +356,7 @@ const MyDocuments = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
-          <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl shadow-sm p-6 text-white"
-               style={{ animation: 'slideUp 0.6s ease-out', opacity: 0, animationFillMode: 'forwards' }}>
+          <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl shadow-sm p-6 text-white" style={{ animation: 'slideUp 0.6s ease-out forwards', opacity: 0 }}>
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-white/80 text-sm font-medium mb-1">TOTAL FILES</p>
@@ -480,9 +367,7 @@ const MyDocuments = () => {
               </div>
             </div>
           </div>
-
-          <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl shadow-sm p-6 text-white"
-               style={{ animation: 'slideUp 0.6s ease-out', opacity: 0, animationDelay: '100ms', animationFillMode: 'forwards' }}>
+          <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl shadow-sm p-6 text-white" style={{ animation: 'slideUp 0.6s ease-out 100ms forwards', opacity: 0 }}>
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-white/80 text-sm font-medium mb-1">APPROVED</p>
@@ -493,9 +378,7 @@ const MyDocuments = () => {
               </div>
             </div>
           </div>
-
-          <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl shadow-sm p-6 text-white"
-               style={{ animation: 'slideUp 0.6s ease-out', opacity: 0, animationDelay: '200ms', animationFillMode: 'forwards' }}>
+          <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl shadow-sm p-6 text-white" style={{ animation: 'slideUp 0.6s ease-out 200ms forwards', opacity: 0 }}>
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-white/80 text-sm font-medium mb-1">PENDING</p>
@@ -506,9 +389,7 @@ const MyDocuments = () => {
               </div>
             </div>
           </div>
-
-          <div className="bg-gradient-to-br from-red-500 to-rose-600 rounded-2xl shadow-sm p-6 text-white"
-               style={{ animation: 'slideUp 0.6s ease-out', opacity: 0, animationDelay: '300ms', animationFillMode: 'forwards' }}>
+          <div className="bg-gradient-to-br from-red-500 to-rose-600 rounded-2xl shadow-sm p-6 text-white" style={{ animation: 'slideUp 0.6s ease-out 300ms forwards', opacity: 0 }}>
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-white/80 text-sm font-medium mb-1">REJECTED</p>
@@ -583,7 +464,7 @@ const MyDocuments = () => {
                   <div className="flex items-center gap-3">
                     {getStatusIcon(document.status)}
                     <div>
-                      <h3 className="text-sm font-semibold text-gray-900 truncate">
+                      <h3 className="text-sm font-semibold text-gray-900 truncate max-w-[200px]">
                         {document.task_title || document.original_filename || 'Document'}
                       </h3>
                       <p className="text-xs text-gray-500">
@@ -601,7 +482,6 @@ const MyDocuments = () => {
                     <p className="text-xs font-medium text-gray-500 mb-1">File Name</p>
                     <p className="text-sm text-gray-900 truncate font-medium">{document.original_filename || document.filename || 'No filename'}</p>
                   </div>
-
                   <div>
                     <p className="text-xs font-medium text-gray-500 mb-1">File Size</p>
                     <p className="text-sm text-gray-900">
@@ -632,6 +512,19 @@ const MyDocuments = () => {
                   >
                     <EyeIcon className="h-4 w-4" />
                   </button>
+                  {document.status === 'rejected' && (
+                    <button
+                      onClick={() => {
+                        setSelectedFile(null);
+                        setFilePreview(null);
+                        setShowUploadModal(true);
+                      }}
+                      className="p-2.5 text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all"
+                      title="Re-upload"
+                    >
+                      <DocumentArrowUpIcon className="h-4 w-4" />
+                    </button>
+                  )}
                   <button
                     onClick={() => handleDelete(document.id)}
                     className="p-2.5 text-gray-600 hover:text-red-600 bg-gray-100 hover:bg-red-50 rounded-xl transition-all"
@@ -665,7 +558,6 @@ const MyDocuments = () => {
         )}
       </div>
 
-      {/* Upload Modal */}
       {showUploadModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -682,8 +574,36 @@ const MyDocuments = () => {
                 <XMarkIcon className="h-6 w-6" />
               </button>
             </div>
-
             <div className="p-6 space-y-4">
+              {!taskId && tasks.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Select Task (Optional)
+                  </label>
+                  <select
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        navigate('/employee/documents', {
+                          state: {
+                            taskId: parseInt(e.target.value),
+                            taskTitle: e.target.options[e.target.selectedIndex].text,
+                            returnTo: '/employee/tasks'
+                          }
+                        });
+                      }
+                    }}
+                  >
+                    <option value="">-- Select a task --</option>
+                    {tasks.map(task => (
+                      <option key={task.id} value={task.id}>{task.title}</option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Selecting a task will automatically link this document to it
+                  </p>
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Select File *
@@ -697,31 +617,16 @@ const MyDocuments = () => {
                 <p className="mt-1 text-xs text-gray-500">
                   PDF, JPG, PNG, DOC, DOCX (Max 10MB)
                 </p>
-                {selectedFile && (
-                  <p className="mt-2 text-sm text-indigo-600 font-medium">
-                    Selected: {selectedFile.name}
-                  </p>
-                )}
               </div>
-
-              {/* File Preview */}
               {filePreview && (
                 <div className="mt-4 p-4 bg-gray-50 rounded-xl border border-gray-200">
                   <p className="text-sm font-medium text-gray-700 mb-3">Preview:</p>
                   {filePreview.type === 'image' && (
-                    <img 
-                      src={filePreview.url} 
-                      alt="Preview" 
-                      className="max-h-64 mx-auto rounded-lg shadow-sm"
-                    />
+                    <img src={filePreview.url} alt="Preview" className="max-h-64 mx-auto rounded-lg shadow-sm" />
                   )}
                   {filePreview.type === 'pdf' && (
                     <div className="text-center">
-                      <iframe 
-                        src={filePreview.url} 
-                        className="w-full h-64 rounded-lg border border-gray-300"
-                        title="PDF Preview"
-                      />
+                      <iframe src={filePreview.url} className="w-full h-64 rounded-lg border border-gray-300" title="PDF Preview" />
                     </div>
                   )}
                   {filePreview.type === 'document' && (
@@ -734,7 +639,6 @@ const MyDocuments = () => {
                 </div>
               )}
             </div>
-
             <div className="flex gap-3 p-6 border-t border-gray-200">
               <button
                 onClick={() => {
@@ -759,14 +663,13 @@ const MyDocuments = () => {
         </div>
       )}
 
-      {/* Document Preview Modal */}
-      {showPreviewModal && (
+      {showPreviewModal && previewDocument && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <div>
                 <h3 className="text-xl font-bold text-gray-900">Document Preview</h3>
-                <p className="text-sm text-gray-600 mt-1">{previewDocument?.original_filename}</p>
+                <p className="text-sm text-gray-600 mt-1">{previewDocument.original_filename || previewDocument.filename}</p>
               </div>
               <button
                 onClick={closePreviewModal}
@@ -775,7 +678,6 @@ const MyDocuments = () => {
                 <XMarkIcon className="h-6 w-6" />
               </button>
             </div>
-
             <div className="flex-1 overflow-auto p-6 bg-gray-50">
               {loadingPreview ? (
                 <div className="flex items-center justify-center h-96">
@@ -786,28 +688,28 @@ const MyDocuments = () => {
                 </div>
               ) : (
                 <>
-                  {previewDocument?.file_type?.startsWith('image/') && (
+                  {previewDocument.file_type?.startsWith('image/') && (
                     <img 
                       src={previewDocument.previewUrl} 
                       alt={previewDocument.original_filename}
                       className="max-w-full max-h-full mx-auto rounded-lg shadow-lg"
                     />
                   )}
-                  {previewDocument?.file_type === 'application/pdf' && (
+                  {previewDocument.file_type === 'application/pdf' && (
                     <iframe 
                       src={previewDocument.previewUrl} 
                       className="w-full h-[70vh] rounded-lg border border-gray-300"
                       title="PDF Preview"
                     />
                   )}
-                  {!previewDocument?.file_type?.startsWith('image/') && 
-                   previewDocument?.file_type !== 'application/pdf' && (
+                  {!previewDocument.file_type?.startsWith('image/') && 
+                   previewDocument.file_type !== 'application/pdf' && (
                     <div className="text-center py-16">
                       <DocumentArrowUpIcon className="h-24 w-24 text-gray-400 mx-auto mb-4" />
                       <p className="text-lg text-gray-600">Preview not available for this file type</p>
                       <p className="text-sm text-gray-500 mt-2">Click download to view the file</p>
                       <button
-                        onClick={() => handleDownload(previewDocument.id, previewDocument.original_filename)}
+                        onClick={() => handleDownload(previewDocument.id, previewDocument.original_filename || previewDocument.filename)}
                         className="mt-4 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all inline-flex items-center gap-2"
                       >
                         <ArrowDownTrayIcon className="h-5 w-5" />
@@ -818,7 +720,6 @@ const MyDocuments = () => {
                 </>
               )}
             </div>
-
             <div className="p-4 border-t border-gray-200 bg-white">
               <button
                 onClick={closePreviewModal}

@@ -24,22 +24,22 @@ import Profile from './pages/employee/Profile';
 
 // HR
 import HRDashboard from './pages/hr/Dashboard';
+import HRDocuments from './pages/hr/HRDocuments';
 import Templates from './pages/hr/Templates';
 import Employees from './pages/hr/Employees';
 import Analytics from './pages/hr/Analytics';
 import CreateTemplate from './pages/hr/CreateTemplate';
 
-// Errors
 import Unauthorized from './pages/Unauthorized';
 import NotFound from './pages/NotFound';
 
-/* ✅ Layout Wrapper */
 const AppLayout = ({ children }) => {
   const location = useLocation();
 
   const fullWidthRoutes = [
     '/employee/dashboard',
-    '/hr/dashboard'
+    '/hr/dashboard',
+    '/hr/documents'
   ];
 
   const isFullWidth = fullWidthRoutes.includes(location.pathname);
@@ -121,6 +121,12 @@ const App = () => {
                         </RoleBasedRoute>
                       } />
 
+                      <Route path="/hr/documents" element={
+                        <RoleBasedRoute allowedRoles={['hr', 'admin']}>
+                          <HRDocuments />
+                        </RoleBasedRoute>
+                      } />
+
                       <Route path="/hr/templates" element={
                         <RoleBasedRoute allowedRoles={['hr', 'admin']}>
                           <Templates />
@@ -145,10 +151,8 @@ const App = () => {
                         </RoleBasedRoute>
                       } />
 
-                      {/* Redirect */}
                       <Route path="/dashboard" element={<Navigate to="/employee/dashboard" />} />
 
-                      {/* Errors */}
                       <Route path="/unauthorized" element={<Unauthorized />} />
                       <Route path="*" element={<NotFound />} />
                     </Routes>

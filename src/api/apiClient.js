@@ -25,20 +25,20 @@ apiClient.interceptors.request.use(
 
 apiClient.interceptors.response.use(
   (response) => {
-    if (response.data && response.data.success) {
-      return { ...response, data: response.data.data };
-    }
     return response;
   },
   (error) => {
     if (error.response?.status === 401) {
       const currentPath = window.location.pathname;
       
-      if (!currentPath.includes('/login') && !currentPath.includes('/register')) {
+      if (!currentPath.includes('/login') && !currentPath.includes('/register') && !currentPath.includes('/forgot-password')) {
         console.error('Authentication failed. Redirecting to login...');
         localStorage.removeItem('authToken');
         localStorage.removeItem('user'); 
-        window.location.href = '/login';
+        
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 100);
       }
     }
     

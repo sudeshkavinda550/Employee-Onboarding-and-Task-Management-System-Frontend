@@ -56,6 +56,7 @@ const Sidebar = () => {
     { name: 'Employees', href: '/hr/employees', icon: UserGroupIcon, gradient: 'from-purple-500 to-pink-500' },
     { name: 'Analytics', href: '/hr/analytics', icon: ChartBarIcon, gradient: 'from-amber-500 to-orange-500' },
     { name: 'Settings', href: '/hr/settings', icon: CogIcon, gradient: 'from-emerald-500 to-teal-500' },
+    { name: 'Documents', href: '/hr/documents', icon: DocumentTextIcon, gradient: 'from-cyan-500 to-blue-500' },
   ];
 
   const adminNav = [

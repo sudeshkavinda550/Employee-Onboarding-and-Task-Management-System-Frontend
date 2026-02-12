@@ -11,8 +11,7 @@ export const documentApi = {
   downloadDocument: (documentId) => 
     axiosInstance.get(`/documents/${documentId}/download`, { responseType: 'blob' }),
   
-  // HR endpoints
-  getAllDocuments: () => axiosInstance.get('/hr/documents'),
+  getAllDocuments: (params = {}) => axiosInstance.get('/hr/documents', { params }),
   approveDocument: (documentId) => 
     axiosInstance.put(`/hr/documents/${documentId}/approve`),
   rejectDocument: (documentId, reason) => 
