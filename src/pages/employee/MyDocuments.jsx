@@ -31,6 +31,10 @@ const MyDocuments = () => {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [filePreview, setFilePreview] = useState(null);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewDocument, setPreviewDocument] = useState(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
 
   useEffect(() => {
     fetchDocuments();
@@ -40,9 +44,18 @@ const MyDocuments = () => {
     try {
       setLoading(true);
       const response = await documentApi.getMyDocuments();
-      setDocuments(Array.isArray(response.data) ? response.data : []);
+      console.log('Full API Response:', response);
+      console.log('Response data:', response.data);
+      
+      const documentsData = response.data?.data || response.data;
+      setDocuments(Array.isArray(documentsData) ? documentsData : []);
+      
+      console.log('Documents set to state:', documentsData);
+      console.log('Documents length:', documentsData?.length);
     } catch (error) {
       console.error('Error fetching documents:', error);
+      const errorMsg = error.response?.data?.message || 'Failed to fetch documents';
+      toast.error(errorMsg);
       setDocuments([]);
     } finally {
       setLoading(false);
@@ -52,9 +65,9 @@ const MyDocuments = () => {
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
     if (file) {
-      const maxSize = 5 * 1024 * 1024;
+      const maxSize = 10 * 1024 * 1024;
       if (file.size > maxSize) {
-        toast.error('File size must be less than 5MB');
+        toast.error('File size must be less than 10MB');
         e.target.value = '';
         return;
       }
@@ -75,6 +88,22 @@ const MyDocuments = () => {
       }
 
       setSelectedFile(file);
+      
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setFilePreview({ type: 'image', url: reader.result });
+        };
+        reader.readAsDataURL(file);
+      } else if (file.type === 'application/pdf') {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setFilePreview({ type: 'pdf', url: reader.result });
+        };
+        reader.readAsDataURL(file);
+      } else {
+        setFilePreview({ type: 'document', name: file.name });
+      }
     }
   };
 
@@ -90,7 +119,14 @@ const MyDocuments = () => {
       formData.append('document', selectedFile);
       
       if (taskId) {
-        formData.append('task_id', taskId);
+        console.log('Task ID being sent:', taskId);
+        console.log('Task ID type:', typeof taskId);
+        formData.append('task_id', String(taskId));
+      }
+
+      console.log('FormData entries:');
+      for (let pair of formData.entries()) {
+        console.log(pair[0], pair[1]);
       }
 
       const response = await documentApi.uploadDocument(formData);
@@ -99,6 +135,7 @@ const MyDocuments = () => {
         toast.success('Document uploaded successfully!');
         setShowUploadModal(false);
         setSelectedFile(null);
+        setFilePreview(null);
         await fetchDocuments();
 
         if (taskId) {
@@ -115,28 +152,40 @@ const MyDocuments = () => {
       }
     } catch (error) {
       console.error('Error uploading document:', error);
+      console.error('Error response:', error.response);
       
       let errorMsg = 'Failed to upload document';
       
       if (error.response) {
         const status = error.response.status;
         const serverMessage = error.response.data?.message || error.response.data?.error;
+        const validationErrors = error.response.data?.errors;
         
-        switch (status) {
-          case 400:
-            errorMsg = serverMessage || 'Invalid file or missing required fields';
-            break;
-          case 401:
-            errorMsg = 'Session expired. Please log in again';
-            break;
-          case 413:
-            errorMsg = 'File is too large. Maximum size is 5MB';
-            break;
-          case 415:
-            errorMsg = 'Unsupported file type';
-            break;
-          default:
-            errorMsg = serverMessage || errorMsg;
+        console.log('Validation errors:', validationErrors);
+        
+        if (validationErrors && Array.isArray(validationErrors)) {
+          errorMsg = validationErrors.map(e => e.message).join(', ');
+        } else {
+          switch (status) {
+            case 400:
+              errorMsg = serverMessage || 'Invalid file or missing required fields';
+              break;
+            case 401:
+              errorMsg = 'Session expired. Please log in again';
+              setTimeout(() => navigate('/login'), 2000);
+              break;
+            case 413:
+              errorMsg = 'File is too large. Maximum size is 10MB';
+              break;
+            case 415:
+              errorMsg = 'Unsupported file type';
+              break;
+            case 500:
+              errorMsg = 'Server error. Please try again later';
+              break;
+            default:
+              errorMsg = serverMessage || errorMsg;
+          }
         }
       } else if (error.request) {
         errorMsg = 'Network error. Please check your connection';
@@ -150,7 +199,9 @@ const MyDocuments = () => {
 
   const handleDownload = async (documentId, filename) => {
     try {
+      toast.info('Downloading document...');
       const response = await documentApi.downloadDocument(documentId);
+      
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
@@ -158,23 +209,126 @@ const MyDocuments = () => {
       document.body.appendChild(link);
       link.click();
       link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      toast.success('Document downloaded successfully');
     } catch (error) {
       console.error('Error downloading document:', error);
-      toast.error('Failed to download document');
+      
+      let errorMsg = 'Failed to download document';
+      
+      if (error.response) {
+        const status = error.response.status;
+        const serverMessage = error.response.data?.message;
+        
+        switch (status) {
+          case 404:
+            errorMsg = 'Document file not found on server';
+            break;
+          case 403:
+            errorMsg = 'You do not have permission to download this document';
+            break;
+          case 401:
+            errorMsg = 'Session expired. Please log in again';
+            setTimeout(() => navigate('/login'), 2000);
+            break;
+          case 500:
+            errorMsg = 'Server error while downloading. Please try again';
+            break;
+          default:
+            errorMsg = serverMessage || errorMsg;
+        }
+      } else if (error.request) {
+        errorMsg = 'Network error. Please check your connection';
+      }
+      
+      toast.error(errorMsg);
     }
   };
 
   const handleDelete = async (documentId) => {
-    if (window.confirm('Are you sure you want to delete this document?')) {
+    if (window.confirm('Are you sure you want to delete this document? This action cannot be undone.')) {
       try {
         await documentApi.deleteDocument(documentId);
         toast.success('Document deleted successfully');
         fetchDocuments();
       } catch (error) {
         console.error('Error deleting document:', error);
-        toast.error('Failed to delete document');
+        
+        let errorMsg = 'Failed to delete document';
+        
+        if (error.response) {
+          const status = error.response.status;
+          const serverMessage = error.response.data?.message;
+          
+          switch (status) {
+            case 404:
+              errorMsg = 'Document not found';
+              fetchDocuments();
+              break;
+            case 403:
+              errorMsg = 'You do not have permission to delete this document';
+              break;
+            case 401:
+              errorMsg = 'Session expired. Please log in again';
+              setTimeout(() => navigate('/login'), 2000);
+              break;
+            case 500:
+              errorMsg = 'Server error while deleting. Please try again';
+              break;
+            default:
+              errorMsg = serverMessage || errorMsg;
+          }
+        } else if (error.request) {
+          errorMsg = 'Network error. Please check your connection';
+        }
+        
+        toast.error(errorMsg);
       }
     }
+  };
+
+  const handleViewDocument = async (document) => {
+    try {
+      setLoadingPreview(true);
+      setShowPreviewModal(true);
+      setPreviewDocument(document);
+      
+      const response = await documentApi.downloadDocument(document.id);
+      const blob = new Blob([response.data], { type: document.file_type });
+      const url = window.URL.createObjectURL(blob);
+      
+      setPreviewDocument(prev => ({
+        ...prev,
+        previewUrl: url,
+        blob: blob
+      }));
+      
+    } catch (error) {
+      console.error('Error loading document preview:', error);
+      
+      let errorMsg = 'Failed to load document preview';
+      
+      if (error.response?.status === 404) {
+        errorMsg = 'Document file not found';
+      } else if (error.response?.status === 403) {
+        errorMsg = 'Access denied';
+      }
+      
+      toast.error(errorMsg);
+      setShowPreviewModal(false);
+    } finally {
+      setLoadingPreview(false);
+    }
+  };
+
+  const closePreviewModal = () => {
+    if (previewDocument?.previewUrl) {
+      window.URL.revokeObjectURL(previewDocument.previewUrl);
+    }
+    setShowPreviewModal(false);
+    setPreviewDocument(null);
+    setLoadingPreview(false);
   };
 
   const handleBackToTasks = () => {
@@ -267,6 +421,9 @@ const MyDocuments = () => {
                 </p>
                 <p className="text-lg font-semibold text-blue-900 mt-1">
                   {taskTitle}
+                </p>
+                <p className="text-xs text-blue-600 mt-1">
+                  Task ID: {taskId}
                 </p>
               </div>
               <button
@@ -469,7 +626,7 @@ const MyDocuments = () => {
                     Download
                   </button>
                   <button
-                    onClick={() => {}}
+                    onClick={() => handleViewDocument(document)}
                     className="p-2.5 text-gray-600 hover:text-indigo-600 bg-gray-100 hover:bg-indigo-50 rounded-xl transition-all"
                     title="Preview"
                   >
@@ -508,15 +665,17 @@ const MyDocuments = () => {
         )}
       </div>
 
+      {/* Upload Modal */}
       {showUploadModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full">
+          <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <h3 className="text-xl font-bold text-gray-900">Upload Document</h3>
               <button
                 onClick={() => {
                   setShowUploadModal(false);
                   setSelectedFile(null);
+                  setFilePreview(null);
                 }}
                 className="text-gray-400 hover:text-gray-600"
               >
@@ -536,7 +695,7 @@ const MyDocuments = () => {
                   className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
                 />
                 <p className="mt-1 text-xs text-gray-500">
-                  PDF, JPG, PNG, DOC, DOCX (Max 5MB)
+                  PDF, JPG, PNG, DOC, DOCX (Max 10MB)
                 </p>
                 {selectedFile && (
                   <p className="mt-2 text-sm text-indigo-600 font-medium">
@@ -544,6 +703,36 @@ const MyDocuments = () => {
                   </p>
                 )}
               </div>
+
+              {/* File Preview */}
+              {filePreview && (
+                <div className="mt-4 p-4 bg-gray-50 rounded-xl border border-gray-200">
+                  <p className="text-sm font-medium text-gray-700 mb-3">Preview:</p>
+                  {filePreview.type === 'image' && (
+                    <img 
+                      src={filePreview.url} 
+                      alt="Preview" 
+                      className="max-h-64 mx-auto rounded-lg shadow-sm"
+                    />
+                  )}
+                  {filePreview.type === 'pdf' && (
+                    <div className="text-center">
+                      <iframe 
+                        src={filePreview.url} 
+                        className="w-full h-64 rounded-lg border border-gray-300"
+                        title="PDF Preview"
+                      />
+                    </div>
+                  )}
+                  {filePreview.type === 'document' && (
+                    <div className="text-center py-8">
+                      <DocumentArrowUpIcon className="h-16 w-16 text-gray-400 mx-auto mb-2" />
+                      <p className="text-sm text-gray-600">{filePreview.name}</p>
+                      <p className="text-xs text-gray-500 mt-1">Preview not available for this file type</p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="flex gap-3 p-6 border-t border-gray-200">
@@ -551,6 +740,7 @@ const MyDocuments = () => {
                 onClick={() => {
                   setShowUploadModal(false);
                   setSelectedFile(null);
+                  setFilePreview(null);
                 }}
                 className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-all"
                 disabled={uploading}
@@ -563,6 +753,78 @@ const MyDocuments = () => {
                 className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               >
                 {uploading ? 'Uploading...' : 'Upload'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Document Preview Modal */}
+      {showPreviewModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">Document Preview</h3>
+                <p className="text-sm text-gray-600 mt-1">{previewDocument?.original_filename}</p>
+              </div>
+              <button
+                onClick={closePreviewModal}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <XMarkIcon className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-auto p-6 bg-gray-50">
+              {loadingPreview ? (
+                <div className="flex items-center justify-center h-96">
+                  <div className="relative">
+                    <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-200"></div>
+                    <div className="animate-spin rounded-full h-12 w-12 border-4 border-indigo-600 border-t-transparent absolute inset-0"></div>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {previewDocument?.file_type?.startsWith('image/') && (
+                    <img 
+                      src={previewDocument.previewUrl} 
+                      alt={previewDocument.original_filename}
+                      className="max-w-full max-h-full mx-auto rounded-lg shadow-lg"
+                    />
+                  )}
+                  {previewDocument?.file_type === 'application/pdf' && (
+                    <iframe 
+                      src={previewDocument.previewUrl} 
+                      className="w-full h-[70vh] rounded-lg border border-gray-300"
+                      title="PDF Preview"
+                    />
+                  )}
+                  {!previewDocument?.file_type?.startsWith('image/') && 
+                   previewDocument?.file_type !== 'application/pdf' && (
+                    <div className="text-center py-16">
+                      <DocumentArrowUpIcon className="h-24 w-24 text-gray-400 mx-auto mb-4" />
+                      <p className="text-lg text-gray-600">Preview not available for this file type</p>
+                      <p className="text-sm text-gray-500 mt-2">Click download to view the file</p>
+                      <button
+                        onClick={() => handleDownload(previewDocument.id, previewDocument.original_filename)}
+                        className="mt-4 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all inline-flex items-center gap-2"
+                      >
+                        <ArrowDownTrayIcon className="h-5 w-5" />
+                        Download Document
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-gray-200 bg-white">
+              <button
+                onClick={closePreviewModal}
+                className="w-full px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-all"
+              >
+                Close
               </button>
             </div>
           </div>
