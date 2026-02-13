@@ -11,17 +11,28 @@ const Employees = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showReminderModal, setShowReminderModal] = useState(false);
+  const [reminderEmployee, setReminderEmployee] = useState(null);
   const [employeeToDelete, setEmployeeToDelete] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [departmentFilter, setDepartmentFilter] = useState('all');
+  const [isFetching, setIsFetching] = useState(false); 
 
   useEffect(() => {
-    fetchEmployees();
-  }, []);
+    if (!isFetching) {
+      fetchEmployees();
+    }
+  }, []); 
 
   const fetchEmployees = async () => {
+    if (isFetching) {
+      console.log('Already fetching, skipping...');
+      return;
+    }
+    
     try {
+      setIsFetching(true);
       setLoading(true);
       const response = await employeeAPI.getAll();
       console.log('API Response:', response);
@@ -43,18 +54,95 @@ const Employees = () => {
         }
       }
       
-      console.log('Extracted employees data:', employeesData);
-      setEmployees(employeesData);
+      const employeesWithProgress = await Promise.all(
+        employeesData.map(async (employee) => {
+          try {
+            if (!employee || !employee.id) {
+              console.warn('Employee missing ID:', employee);
+              return {
+                ...employee,
+                progress_percentage: 0,
+                onboarding_status: 'not_started',
+                total_tasks: 0,
+                completed_tasks: 0
+              };
+            }
+            
+            let progressData = {};
+            try {
+              const progressResponse = await employeeAPI.getProgress(employee.id);
+              console.log(`Progress response for ${employee.name}:`, progressResponse.data);
+              
+              progressData = progressResponse.data;
+              if (progressResponse.data && progressResponse.data.data) {
+                progressData = progressResponse.data.data;
+              }
+            } catch (progressError) {
+              console.warn(`Progress endpoint not available for ${employee.name}, using existing data`);
+              progressData = {
+                total: employee.total_tasks || 0,
+                completed: employee.completed_tasks || 0,
+                percentage: employee.progress_percentage || 0
+              };
+            }
+            
+            const totalTasks = progressData.total || progressData.total_tasks || 0;
+            const completedTasks = progressData.completed || progressData.completed_tasks || 0;
+            const progressPercentage = progressData.percentage || progressData.progress_percentage || 
+              (totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0);
+            
+            console.log(`Progress for ${employee.name}: ${completedTasks}/${totalTasks} = ${progressPercentage}%`);
+            
+            if (progressPercentage === 100 && totalTasks > 0) {
+              toast.success(`${employee.name} has completed all onboarding tasks!`, {
+                duration: 5000,
+              });
+            } else if (progressPercentage >= 75 && progressPercentage < 100) {
+              toast.success(`${employee.name} is almost done! (${progressPercentage}% complete)`, {
+                duration: 4000,
+              });
+            }
+            
+            let onboardingStatus = 'not_started';
+            if (progressPercentage === 100) {
+              onboardingStatus = 'completed';
+            } else if (progressPercentage > 0) {
+              onboardingStatus = 'in_progress';
+            }
+            
+            return {
+              ...employee,
+              progress_percentage: progressPercentage,
+              onboarding_status: onboardingStatus,
+              total_tasks: totalTasks,
+              completed_tasks: completedTasks
+            };
+          } catch (error) {
+            console.error(`Error fetching tasks for employee ${employee.id}:`, error);
+            return {
+              ...employee,
+              progress_percentage: employee.progress_percentage || 0,
+              total_tasks: 0,
+              completed_tasks: 0
+            };
+          }
+        })
+      );
+      
+      console.log('Employees with calculated progress:', employeesWithProgress);
+      setEmployees(employeesWithProgress);
     } catch (error) {
       console.error('Error fetching employees:', error);
       toast.error('Failed to load employees');
       setEmployees([]); 
     } finally {
       setLoading(false);
+      setIsFetching(false);
     }
   };
 
   const handleSelectEmployee = async (employee) => {
+    console.log('View button clicked for employee:', employee);
     try {
       const response = await employeeAPI.getById(employee.id);
       console.log('Employee details response:', response);
@@ -67,6 +155,37 @@ const Employees = () => {
         employeeData = response.data.employee;
       }
       
+      try {
+        let progressData = {};
+        try {
+          const progressResponse = await employeeAPI.getProgress(employee.id);
+          progressData = progressResponse.data;
+          
+          if (progressResponse.data && progressResponse.data.data) {
+            progressData = progressResponse.data.data;
+          }
+        } catch (progressError) {
+          console.warn('Progress endpoint not available, using existing employee data');
+          progressData = {
+            total: employee.total_tasks || employeeData.total_tasks || 0,
+            completed: employee.completed_tasks || employeeData.completed_tasks || 0,
+            percentage: employee.progress_percentage || employeeData.progress_percentage || 0
+          };
+        }
+        
+        employeeData.total_tasks = progressData.total || progressData.total_tasks || 0;
+        employeeData.completed_tasks = progressData.completed || progressData.completed_tasks || 0;
+        employeeData.progress_percentage = progressData.percentage || progressData.progress_percentage || 
+          (employeeData.total_tasks > 0 
+            ? Math.round((employeeData.completed_tasks / employeeData.total_tasks) * 100) 
+            : 0);
+      } catch (taskError) {
+        console.error('Error fetching employee progress:', taskError);
+        employeeData.total_tasks = employee.total_tasks || 0;
+        employeeData.completed_tasks = employee.completed_tasks || 0;
+        employeeData.progress_percentage = employee.progress_percentage || 0;
+      }
+      
       setSelectedEmployee(employeeData);
       setShowDetails(true);
     } catch (error) {
@@ -75,13 +194,22 @@ const Employees = () => {
     }
   };
 
-  const handleSendReminder = async (employeeId) => {
+  const handleSendReminder = async (employee) => {
+    setReminderEmployee(employee);
+    setShowReminderModal(true);
+  };
+
+  const handleSendReminderSubmit = async (message) => {
     try {
-      await employeeAPI.sendReminder(employeeId);
-      toast.success('Reminder sent successfully');
+      await employeeAPI.sendReminder(reminderEmployee.id, { message });
+      toast.success(`Reminder sent successfully to ${reminderEmployee.name}!`, {
+        duration: 4000,
+      });
+      setShowReminderModal(false);
+      setReminderEmployee(null);
     } catch (error) {
       console.error('Error sending reminder:', error);
-      toast.error('Failed to send reminder');
+      toast.error('Failed to send reminder. Please try again.');
     }
   };
 
@@ -96,7 +224,9 @@ const Employees = () => {
   const handleSubmitEmployee = async (employeeData) => {
     try {
       await employeeAPI.create(employeeData);
-      toast.success('Employee created successfully! Welcome email sent.');
+      toast.success(`Employee "${employeeData.name}" created successfully! Welcome email sent.`, {
+        duration: 5000,
+      });
       setShowCreateModal(false);
       fetchEmployees();
     } catch (error) {
@@ -141,14 +271,16 @@ const Employees = () => {
   const handleUpdateEmployee = async (employeeData) => {
     try {
       await employeeAPI.update(selectedEmployee.id, employeeData);
-      toast.success('Employee updated successfully!');
+      toast.success(`Employee "${employeeData.name || selectedEmployee.name}" updated successfully!`, {
+        duration: 4000
+      });
       setShowEditModal(false);
       setSelectedEmployee(null);
       fetchEmployees();
     } catch (error) {
       console.error('Error updating employee:', error);
       const errorMessage = error.response?.data?.message || 'Failed to update employee';
-      toast.error(errorMessage);
+      toast.error(`${errorMessage}`);
     }
   };
 
@@ -168,7 +300,9 @@ const Employees = () => {
       
       await employeeAPI.delete(employeeToDelete.id);
       
-      toast.success('Employee deleted successfully!');
+      toast.success(`Employee "${employeeToDelete.name}" deleted successfully!`, {
+        duration: 4000
+      });
       setShowDeleteModal(false);
       setEmployeeToDelete(null);
       
@@ -208,7 +342,9 @@ const Employees = () => {
         errorMessage = error.message;
       }
       
-      toast.error(errorMessage);
+      toast.error(`${errorMessage}`, {
+        duration: 5000
+      });
     }
   };
 
@@ -348,6 +484,21 @@ const Employees = () => {
                     Progress: {employee.progress_percentage || 0}%
                   </span>
                 </div>
+                
+                <div className="mt-3">
+                  <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                    <div 
+                      className="h-full bg-gradient-to-r from-indigo-500 to-purple-600 transition-all duration-500 ease-out rounded-full"
+                      style={{ width: `${employee.progress_percentage || 0}%` }}
+                    ></div>
+                  </div>
+                  <div className="flex justify-between items-center mt-1">
+                    <span className="text-xs text-gray-500">
+                      {employee.completed_tasks || 0}/{employee.total_tasks || 0} tasks
+                    </span>
+                  </div>
+                </div>
+                
                 {employee.department_name && (
                   <div className="mt-2">
                     <span className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-lg">
@@ -410,6 +561,70 @@ const Employees = () => {
             </div>
             
             <div className="p-6 space-y-6">
+              <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl p-6 border border-indigo-100">
+                <h3 className="text-lg font-bold text-gray-900 mb-4">Onboarding Progress</h3>
+                <div className="flex items-center gap-6">
+                  <div className="relative w-32 h-32 flex-shrink-0">
+                    <svg className="transform -rotate-90 w-32 h-32">
+                      <circle
+                        cx="64"
+                        cy="64"
+                        r="56"
+                        stroke="#e0e7ff"
+                        strokeWidth="10"
+                        fill="transparent"
+                      />
+                      <circle
+                        cx="64"
+                        cy="64"
+                        r="56"
+                        stroke="url(#gradient)"
+                        strokeWidth="10"
+                        fill="transparent"
+                        strokeDasharray={`${2 * Math.PI * 56}`}
+                        strokeDashoffset={`${2 * Math.PI * 56 * (1 - (selectedEmployee.progress_percentage || 0) / 100)}`}
+                        strokeLinecap="round"
+                      />
+                      <defs>
+                        <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                          <stop offset="0%" stopColor="#6366f1" />
+                          <stop offset="100%" stopColor="#a855f7" />
+                        </linearGradient>
+                      </defs>
+                    </svg>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span className="text-3xl font-bold text-gray-900">{selectedEmployee.progress_percentage || 0}%</span>
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <p className="text-sm text-gray-500">Total Tasks</p>
+                        <p className="text-2xl font-bold text-gray-900">{selectedEmployee.total_tasks || 0}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500">Completed</p>
+                        <p className="text-2xl font-bold text-green-600">{selectedEmployee.completed_tasks || 0}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500">Remaining</p>
+                        <p className="text-2xl font-bold text-amber-600">
+                          {(selectedEmployee.total_tasks || 0) - (selectedEmployee.completed_tasks || 0)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-3">
+                      <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                        <div 
+                          className="h-full bg-gradient-to-r from-indigo-500 to-purple-600 transition-all duration-500 ease-out rounded-full"
+                          style={{ width: `${selectedEmployee.progress_percentage || 0}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-semibold text-gray-500">Employee ID</label>
@@ -439,7 +654,7 @@ const Employees = () => {
 
               <div className="flex gap-3 pt-4 border-t">
                 <button
-                  onClick={() => handleSendReminder(selectedEmployee.id)}
+                  onClick={() => handleSendReminder(selectedEmployee)}
                   className="flex-1 px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-all cursor-pointer"
                 >
                   Send Reminder
@@ -493,6 +708,124 @@ const Employees = () => {
           onConfirm={handleConfirmDelete}
         />
       )}
+
+      {showReminderModal && reminderEmployee && (
+        <ReminderModal
+          employee={reminderEmployee}
+          onClose={() => {
+            setShowReminderModal(false);
+            setReminderEmployee(null);
+          }}
+          onSend={handleSendReminderSubmit}
+        />
+      )}
+    </div>
+  );
+};
+
+const ReminderModal = ({ employee, onClose, onSend }) => {
+  const [message, setMessage] = useState(
+    `Hi ${employee.name},\n\nThis is a friendly reminder to complete your pending onboarding tasks.\n\nYou currently have ${(employee.total_tasks || 0) - (employee.completed_tasks || 0)} task(s) remaining.\n\nPlease log in to the onboarding portal at your earliest convenience to continue.\n\nThank you!`
+  );
+  const [isSending, setIsSending] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!message.trim()) {
+      toast.error('Please enter a message');
+      return;
+    }
+    
+    setIsSending(true);
+    try {
+      await onSend(message);
+    } catch (error) {
+      console.error('Error in reminder modal:', error);
+      setIsSending(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full">
+        <div className="sticky top-0 bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-4 rounded-t-2xl">
+          <div className="flex justify-between items-center">
+            <h2 className="text-xl font-bold text-white">📧 Send Reminder to {employee.name}</h2>
+            <button
+              onClick={onClose}
+              disabled={isSending}
+              className="p-2 rounded-xl text-white/80 hover:text-white hover:bg-white/20 transition-all cursor-pointer disabled:opacity-50"
+            >
+              <XMarkIcon className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-blue-900">Employee Progress</p>
+                <p className="text-xs text-blue-700 mt-1">
+                  {employee.completed_tasks}/{employee.total_tasks} tasks completed ({employee.progress_percentage}%)
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Reminder Message
+            </label>
+            <textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              rows={8}
+              disabled={isSending}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300 cursor-text disabled:bg-gray-100 disabled:cursor-not-allowed resize-none"
+              placeholder="Enter your reminder message..."
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              This message will be sent via email notification
+            </p>
+          </div>
+
+          <div className="flex gap-3 pt-4 border-t border-gray-200">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isSending}
+              className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSending}
+              className="flex-1 px-4 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-semibold rounded-lg hover:shadow-md transition-all cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {isSending ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                  Send Reminder
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 };

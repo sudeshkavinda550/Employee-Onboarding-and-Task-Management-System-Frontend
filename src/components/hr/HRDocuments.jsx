@@ -67,43 +67,43 @@ const HRDocuments = () => {
   };
 
   const handleReject = async (documentId, taskId) => {
-  if (!rejectionReason.trim()) {
-    toast.error('Please provide a reason for rejection');
-    return;
-  }
+    if (!rejectionReason.trim()) {
+      toast.error('Please provide a reason for rejection');
+      return;
+    }
 
-  if (rejectionReason.trim().length < 10) {
-    toast.error('Rejection reason must be at least 10 characters');
-    return;
-  }
+    if (rejectionReason.trim().length < 10) {
+      toast.error('Rejection reason must be at least 10 characters');
+      return;
+    }
 
-  if (rejectionReason.trim().length > 500) {
-    toast.error('Rejection reason must be less than 500 characters');
-    return;
-  }
+    if (rejectionReason.trim().length > 500) {
+      toast.error('Rejection reason must be less than 500 characters');
+      return;
+    }
 
-  try {
-    console.log('Rejecting document:', documentId);
-    console.log('Rejection reason:', rejectionReason);
-    
-    await documentApi.rejectDocument(documentId, rejectionReason);
-    
-    await taskApi.updateTaskStatus(taskId, { status: 'pending' });
-    
-    toast.success('Document rejected successfully. Task returned to pending.');
-    fetchDocuments();
-    setShowModal(false);
-    setRejectionReason('');
-  } catch (error) {
-    console.error('Error rejecting document:', error);
-    console.error('Error response:', error.response?.data);
-    
-    const errorMsg = error.response?.data?.message || 
-                     error.response?.data?.error || 
-                     'Failed to reject document';
-    toast.error(errorMsg);
-  }
-};
+    try {
+      console.log('Rejecting document:', documentId);
+      console.log('Rejection reason:', rejectionReason);
+      
+      await documentApi.rejectDocument(documentId, rejectionReason);
+      
+      await taskApi.updateTaskStatus(taskId, { status: 'pending' });
+      
+      toast.success('Document rejected successfully. Task returned to pending.');
+      fetchDocuments();
+      setShowModal(false);
+      setRejectionReason('');
+    } catch (error) {
+      console.error('Error rejecting document:', error);
+      console.error('Error response:', error.response?.data);
+      
+      const errorMsg = error.response?.data?.message || 
+                       error.response?.data?.error || 
+                       'Failed to reject document';
+      toast.error(errorMsg);
+    }
+  };
 
   const handleViewDocument = async (document) => {
     try {
@@ -209,7 +209,7 @@ const HRDocuments = () => {
         }
       `}</style>
 
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className="w-full space-y-6">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h1 className="text-4xl font-bold text-gray-900 mb-2 tracking-tight">Document Review</h1>

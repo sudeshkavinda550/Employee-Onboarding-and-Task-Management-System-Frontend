@@ -233,15 +233,23 @@ export const employeeAPI = {
   },
   
   getProgress: (id) => {
+    if (!id) {
+      console.error('getProgress called with undefined id');
+      return Promise.reject(new Error('Employee ID is required'));
+    }
     return api.get(`/employees/${id}/progress`);
   },
   
-  sendReminder: (id) => {
-    return api.post(`/employees/${id}/reminder`);
+  sendReminder: (id, data) => {
+    return api.post(`/employees/${id}/reminder`, data);
   },
   
   assignTemplate: (id, templateId) => {
     return api.post(`/employees/${id}/assign-template`, { templateId });
+  },
+  
+  getEmployeeTasks: function(id) {
+    return this.getTasks(id);
   },
 };
 
