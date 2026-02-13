@@ -19,14 +19,15 @@ import {
 const Sidebar = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [isHamburgerVisible, setIsHamburgerVisible] = useState(false);
 
   const handleLogout = async () => {
     try {
       await logout();
       navigate('/login');
-      setIsMobileMenuOpen(false);
+      setIsSidebarOpen(false);
     } catch (error) {
       console.error('Logout failed:', error);
     } finally {
@@ -42,6 +43,15 @@ const Sidebar = () => {
     setShowLogoutConfirm(false);
   };
 
+  const toggleSidebar = () => {
+    setIsSidebarOpen(!isSidebarOpen);
+  };
+
+  const closeSidebar = () => {
+    setIsSidebarOpen(false);
+    setIsHamburgerVisible(false);
+  };
+
   const employeeNav = [
     { name: 'Dashboard', href: '/employee/dashboard', icon: HomeIcon, gradient: 'from-indigo-500 to-purple-500' },
     { name: 'My Tasks', href: '/employee/tasks', icon: DocumentTextIcon, gradient: 'from-blue-500 to-cyan-500' },
@@ -55,7 +65,6 @@ const Sidebar = () => {
     { name: 'Templates', href: '/hr/templates', icon: DocumentTextIcon, gradient: 'from-blue-500 to-cyan-500' },
     { name: 'Employees', href: '/hr/employees', icon: UserGroupIcon, gradient: 'from-purple-500 to-pink-500' },
     { name: 'Analytics', href: '/hr/analytics', icon: ChartBarIcon, gradient: 'from-amber-500 to-orange-500' },
-    { name: 'Settings', href: '/hr/settings', icon: CogIcon, gradient: 'from-emerald-500 to-teal-500' },
     { name: 'Documents', href: '/hr/documents', icon: DocumentTextIcon, gradient: 'from-cyan-500 to-blue-500' },
   ];
 
@@ -123,29 +132,52 @@ const Sidebar = () => {
         .nav-gradient-hover:hover::before {
           left: 100%;
         }
-        
-        @media (min-width: 768px) {
-          body {
-            padding-left: 288px;
-          }
+
+        .hamburger-trigger {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 60px;
+          height: 60px;
+          z-index: 45;
+        }
+
+        .hamburger-button {
+          opacity: 0;
+          transition: opacity 0.2s ease-in-out;
+        }
+
+        .hamburger-trigger:hover .hamburger-button {
+          opacity: 1;
+        }
+
+        .hamburger-button.visible {
+          opacity: 1;
         }
       `}</style>
 
-      <button
-        onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-        className="md:hidden fixed top-4 left-4 z-50 p-2 bg-white rounded-xl shadow-lg border border-gray-200"
+      <div 
+        className="hamburger-trigger"
+        onMouseEnter={() => setIsHamburgerVisible(true)}
+        onMouseLeave={() => !isSidebarOpen && setIsHamburgerVisible(false)}
       >
-        {isMobileMenuOpen ? (
-          <XMarkIcon className="h-6 w-6 text-gray-700" />
-        ) : (
-          <Bars3Icon className="h-6 w-6 text-gray-700" />
-        )}
-      </button>
+        <button
+          onClick={toggleSidebar}
+          className={`hamburger-button ${isHamburgerVisible || isSidebarOpen ? 'visible' : ''} fixed top-4 left-4 z-50 p-2.5 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300`}
+          aria-label="Toggle sidebar"
+        >
+          {isSidebarOpen ? (
+            <XMarkIcon className="h-6 w-6 text-white" />
+          ) : (
+            <Bars3Icon className="h-6 w-6 text-white" />
+          )}
+        </button>
+      </div>
 
-      {isMobileMenuOpen && (
+      {isSidebarOpen && (
         <div 
-          className="md:hidden fixed inset-0 bg-gray-900 bg-opacity-50 z-30 backdrop-blur-sm"
-          onClick={() => setIsMobileMenuOpen(false)}
+          className="fixed inset-0 bg-gray-900 bg-opacity-50 z-30 backdrop-blur-sm transition-opacity duration-300"
+          onClick={closeSidebar}
         />
       )}
 
@@ -181,11 +213,10 @@ const Sidebar = () => {
 
       <div className={`
         fixed inset-y-0 left-0 z-40 w-72 transform transition-transform duration-300 ease-in-out
-        md:translate-x-0
-        ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
+        ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         <div className="flex flex-col h-full bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
-          <div className="flex-shrink-0 px-6 py-6">
+          <div className="flex-shrink-0 px-6 py-6 mt-16">
             <div className="flex items-center gap-3">
               <div className="relative">
                 <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
@@ -225,7 +256,7 @@ const Sidebar = () => {
                   <NavLink
                     key={item.name}
                     to={item.href}
-                    onClick={() => setIsMobileMenuOpen(false)}
+                    onClick={closeSidebar}
                     className={({ isActive }) =>
                       `nav-item group flex items-center justify-between px-4 py-3.5 text-sm font-medium rounded-xl transition-all duration-300 nav-gradient-hover ${
                         isActive
@@ -264,21 +295,7 @@ const Sidebar = () => {
             </nav>
           </div>
 
-          <div className="flex-shrink-0 p-4 space-y-3">
-            <button
-              onClick={confirmLogout}
-              className="nav-item group flex items-center justify-between w-full px-4 py-3.5 text-sm font-medium rounded-xl transition-all duration-300 nav-gradient-hover text-red-300 hover:text-red-100 hover:bg-red-500/10 border border-white/5"
-              style={{ animationDelay: '250ms' }}
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-1.5 rounded-lg transition-all duration-300 bg-red-500/10 group-hover:bg-red-500/20">
-                  <ArrowRightOnRectangleIcon className="h-5 w-5 transition-transform duration-300 group-hover:scale-110" />
-                </div>
-                <span className="font-medium">Logout</span>
-              </div>
-              <ChevronRightIcon className="h-4 w-4 transition-all duration-300 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0" />
-            </button>
-            
+          <div className="flex-shrink-0 p-4 space-y-3">            
             <div className="px-4 py-3 bg-gradient-to-r from-indigo-500/10 to-purple-500/10 rounded-xl border border-white/5">
               <div className="flex items-center gap-2 text-xs text-gray-400">
                 <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
