@@ -31,6 +31,14 @@ import Employees from './pages/hr/Employees';
 import Analytics from './pages/hr/Analytics';
 import CreateTemplate from './pages/hr/CreateTemplate';
 
+import AdminDashboard  from './components/dashboard/AdminDashboard';
+import AdminHRAccounts from './pages/admin/AdminHRAccounts';
+import AdminEmployees  from './pages/admin/AdminEmployees';
+import AdminTemplates  from './pages/admin/AdminTemplates';
+import AdminDocuments  from './pages/admin/AdminDocuments';
+import AdminAuditLog   from './pages/admin/AdminAuditLog';
+import AdminSettings   from './pages/admin/AdminSettings';
+
 import Notifications from './pages/Notifications';
 
 import Unauthorized from './pages/Unauthorized';
@@ -56,7 +64,6 @@ const App = () => {
                   </ProtectedRoute>
                 }
               >
-
                 <Route
                   path="/employee/dashboard"
                   element={
@@ -170,6 +177,69 @@ const App = () => {
                   element={
                     <RoleBasedRoute allowedRoles={['hr', 'admin']}>
                       <Notifications />
+                    </RoleBasedRoute>
+                  }
+                />
+
+                <Route
+                  path="/admin/dashboard"
+                  element={
+                    <RoleBasedRoute allowedRoles={['admin']}>
+                      <AdminDashboard />
+                    </RoleBasedRoute>
+                  }
+                />
+
+                <Route
+                  path="/admin/hr"
+                  element={
+                    <RoleBasedRoute allowedRoles={['admin']}>
+                      <AdminHRAccounts />
+                    </RoleBasedRoute>
+                  }
+                />
+
+                <Route
+                  path="/admin/employees"
+                  element={
+                    <RoleBasedRoute allowedRoles={['admin']}>
+                      <AdminEmployees />
+                    </RoleBasedRoute>
+                  }
+                />
+
+                <Route
+                  path="/admin/templates"
+                  element={
+                    <RoleBasedRoute allowedRoles={['admin']}>
+                      <AdminTemplates />
+                    </RoleBasedRoute>
+                  }
+                />
+
+                <Route
+                  path="/admin/documents"
+                  element={
+                    <RoleBasedRoute allowedRoles={['admin']}>
+                      <AdminDocuments />
+                    </RoleBasedRoute>
+                  }
+                />
+
+                <Route
+                  path="/admin/analytics"
+                  element={
+                    <RoleBasedRoute allowedRoles={['admin']}>
+                      <AdminAuditLog />
+                    </RoleBasedRoute>
+                  }
+                />
+
+                <Route
+                  path="/admin/settings"
+                  element={
+                    <RoleBasedRoute allowedRoles={['admin']}>
+                      <AdminSettings />
                     </RoleBasedRoute>
                   }
                 />

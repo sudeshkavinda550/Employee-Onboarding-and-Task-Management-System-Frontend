@@ -13,7 +13,10 @@ import {
   Bars3Icon,
   XMarkIcon,
   ArrowRightOnRectangleIcon,
-  ExclamationTriangleIcon
+  ExclamationTriangleIcon,
+  FolderIcon,        
+  ClipboardIcon,    
+  ShieldCheckIcon,   
 } from '@heroicons/react/24/outline';
 
 const Sidebar = () => {
@@ -69,11 +72,13 @@ const Sidebar = () => {
   ];
 
   const adminNav = [
-    { name: 'Dashboard', href: '/admin/dashboard', icon: HomeIcon, gradient: 'from-indigo-500 to-purple-500' },
-    { name: 'HR Management', href: '/admin/hr', icon: UserGroupIcon, gradient: 'from-blue-500 to-cyan-500' },
-    { name: 'Templates', href: '/admin/templates', icon: DocumentTextIcon, gradient: 'from-purple-500 to-pink-500' },
-    { name: 'Analytics', href: '/admin/analytics', icon: ChartBarIcon, gradient: 'from-amber-500 to-orange-500' },
-    { name: 'System Settings', href: '/admin/settings', icon: CogIcon, gradient: 'from-emerald-500 to-teal-500' },
+    { name: 'Dashboard',      href: '/admin/dashboard',  icon: HomeIcon,        gradient: 'from-indigo-500 to-purple-500' },
+    { name: 'HR Management',  href: '/admin/hr',         icon: ShieldCheckIcon, gradient: 'from-blue-500 to-cyan-500'    },
+    { name: 'Employees',      href: '/admin/employees',  icon: UserGroupIcon,   gradient: 'from-violet-500 to-purple-500'},
+    { name: 'Templates',      href: '/admin/templates',  icon: DocumentTextIcon,gradient: 'from-purple-500 to-pink-500'  },
+    { name: 'Documents',      href: '/admin/documents',  icon: FolderIcon,      gradient: 'from-cyan-500 to-blue-500'    },
+    { name: 'Audit Log',      href: '/admin/analytics',  icon: ClipboardIcon,   gradient: 'from-amber-500 to-orange-500' },
+    { name: 'System Settings',href: '/admin/settings',   icon: CogIcon,         gradient: 'from-emerald-500 to-teal-500' },
   ];
 
   const getNavigation = () => {
@@ -293,15 +298,6 @@ const Sidebar = () => {
                 ))}
               </div>
             </nav>
-          </div>
-
-          <div className="flex-shrink-0 p-4 space-y-3">            
-            <div className="px-4 py-3 bg-gradient-to-r from-indigo-500/10 to-purple-500/10 rounded-xl border border-white/5">
-              <div className="flex items-center gap-2 text-xs text-gray-400">
-                <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
-                <span>System Online</span>
-              </div>
-            </div>
           </div>
         </div>
       </div>

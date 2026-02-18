@@ -97,6 +97,11 @@ export const analyticsApi = {
       throw error;
     }
   },
+
+  getAdminStats: () => api.get('/admin/stats'),
+  getDeptStats: () => api.get('/admin/dept-stats'),
+  getRecentActivity: () => api.get('/admin/recent-activity'),
+  getSystemHealth: () => api.get('/admin/system-health'),
 };
 
 export const templateAPI = {
@@ -254,5 +259,27 @@ export const employeeAPI = {
 };
 
 export const employeeApi = employeeAPI;
+
+export const adminApi = {
+  getHRAccounts:    ()           => api.get('/admin/hr-accounts'),
+  createHRAccount:  (data)       => api.post('/admin/hr-accounts', data),
+  updateHRStatus:   (id, action) => api.patch(`/admin/hr-accounts/${id}/status`, { action }),
+  deleteHRAccount:  (id)         => api.delete(`/admin/hr-accounts/${id}`),
+
+  getAllEmployees:   ()          => api.get('/admin/employees'),
+
+  getAllTemplates:   ()          => api.get('/admin/templates'),
+
+  getAllDocuments:   ()          => api.get('/admin/documents'),
+
+  getAuditLog:      (params)     => api.get('/admin/audit-log', { params }),
+  exportAuditLog:   (config)     => api.get('/admin/audit-log/export', config),
+
+  getSettings:      ()           => api.get('/admin/settings'),
+  saveSettings:     (data)       => api.put('/admin/settings', data),
+
+  exportData:       (config)     => api.get('/admin/export', config),
+  dangerAction:     (action)     => api.post(`/admin/danger/${action}`),
+};
 
 export default api;

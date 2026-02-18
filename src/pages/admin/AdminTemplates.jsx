@@ -1,0 +1,169 @@
+import React, { useState, useEffect } from 'react';
+import {
+  MagnifyingGlassIcon,
+  DocumentTextIcon,
+  XMarkIcon,
+} from '@heroicons/react/24/outline';
+import { adminApi } from '../../services/api';
+const taskTypeIcon = (type) =>
+  ({ upload: '📎', read: '📖', watch: '🎬', meet: '🤝', form: '📝', sign: '✍️' }[type] || '✅');
+
+const AdminTemplates = () => {
+  const [templates, setTemplates] = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [search, setSearch]       = useState('');
+  const [selected, setSelected]   = useState(null);
+
+  useEffect(() => {
+    adminApi.getAllTemplates()
+      .then((res) => setTemplates(res.data))
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filtered = templates.filter(
+    (t) =>
+      t.name.toLowerCase().includes(search.toLowerCase()) ||
+      (t.createdByName || '').toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div className="p-6 space-y-6">
+
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Onboarding Templates</h1>
+        <p className="text-gray-500 mt-1 text-sm">
+          All templates created by HR managers — admin view
+        </p>
+      </div>
+
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="relative">
+          <MagnifyingGlassIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search templates…"
+            className="pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm w-72
+                       focus:outline-none focus:border-purple-500 transition-colors"
+          />
+        </div>
+        <span className="bg-gray-100 text-gray-500 text-xs font-semibold px-3 py-1.5 rounded-full">
+          {filtered.length} templates
+        </span>
+      </div>
+
+      {loading ? (
+        <div className="py-20 text-center text-gray-400 text-sm">Loading templates…</div>
+      ) : filtered.length === 0 ? (
+        <div className="py-20 text-center text-gray-400 text-sm">No templates found.</div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+          {filtered.map((tmpl) => (
+            <div
+              key={tmpl._id}
+              onClick={() => setSelected(tmpl)}
+              className="bg-white border border-gray-100 rounded-2xl p-5 cursor-pointer shadow-sm
+                         hover:border-purple-300 hover:shadow-md transition-all"
+            >
+              <div className="flex justify-between items-start mb-4">
+                <div className="w-11 h-11 rounded-xl bg-purple-100 flex items-center justify-center text-xl">
+                  📋
+                </div>
+                <span className="bg-gray-100 text-gray-500 text-xs font-semibold px-2.5 py-1 rounded-full">
+                  {tmpl.tasks?.length ?? 0} tasks
+                </span>
+              </div>
+
+              <p className="text-base font-bold text-gray-900 mb-1">{tmpl.name}</p>
+              <p className="text-xs text-gray-400 mb-4">
+                Created by {tmpl.createdByName || 'HR Manager'}
+              </p>
+
+              <div className="flex flex-wrap gap-1.5 mb-4">
+                {(tmpl.tasks || []).slice(0, 3).map((task, i) => (
+                  <span
+                    key={i}
+                    className="bg-gray-50 text-gray-600 text-xs px-2 py-0.5 rounded-md border border-gray-100"
+                  >
+                    {taskTypeIcon(task.type)} {task.title}
+                  </span>
+                ))}
+                {(tmpl.tasks?.length || 0) > 3 && (
+                  <span className="bg-purple-50 text-purple-600 text-xs px-2 py-0.5 rounded-md font-semibold">
+                    +{tmpl.tasks.length - 3} more
+                  </span>
+                )}
+              </div>
+
+              <div className="flex justify-between pt-3 border-t border-gray-50 text-xs text-gray-400">
+                <span>📅 {tmpl.createdAt ? new Date(tmpl.createdAt).toLocaleDateString() : '—'}</span>
+                <span>👥 {tmpl.usageCount ?? 0} employees</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {selected && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-7 w-full max-w-lg max-h-[80vh] overflow-y-auto shadow-2xl">
+            <div className="flex justify-between items-center mb-5">
+              <h2 className="text-lg font-bold text-gray-900 pr-4">{selected.name}</h2>
+              <button
+                onClick={() => setSelected(null)}
+                className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
+              >
+                <XMarkIcon className="h-5 w-5 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 mb-6">
+              {[
+                { label: 'Total Tasks',        value: selected.tasks?.length ?? 0, color: 'text-purple-600' },
+                { label: 'Employees Assigned', value: selected.usageCount ?? 0,     color: 'text-emerald-600' },
+                { label: 'Avg Days',           value: selected.avgCompletionDays ?? '—', color: 'text-amber-500' },
+              ].map(({ label, value, color }) => (
+                <div key={label} className="bg-gray-50 rounded-xl p-3 text-center">
+                  <p className={`text-2xl font-extrabold ${color}`}>{value}</p>
+                  <p className="text-xs text-gray-400 mt-1">{label}</p>
+                </div>
+              ))}
+            </div>
+
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+              Task Checklist
+            </p>
+            <div className="space-y-0">
+              {(selected.tasks || []).map((task, i) => (
+                <div
+                  key={i}
+                  className="flex gap-3 items-start py-3 border-b border-gray-50 last:border-0"
+                >
+                  <span className="text-lg flex-shrink-0">{taskTypeIcon(task.type)}</span>
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">{task.title}</p>
+                    {task.description && (
+                      <p className="text-xs text-gray-400 mt-0.5">{task.description}</p>
+                    )}
+                    <span className="inline-block mt-1 bg-gray-100 text-gray-500 text-[10px]
+                                     font-bold uppercase tracking-wide px-2 py-0.5 rounded-md">
+                      {task.type}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <p className="text-xs text-gray-400 mt-4">
+              Created by {selected.createdByName} ·{' '}
+              {selected.createdAt ? new Date(selected.createdAt).toLocaleDateString() : ''}
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default AdminTemplates;

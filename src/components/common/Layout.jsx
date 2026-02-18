@@ -21,12 +21,17 @@ const Layout = () => {
     '/hr/employees',
     '/hr/analytics',
     '/admin/dashboard',
+    '/admin/hr',
+    '/admin/employees',
     '/admin/templates',
-    '/admin/analytics'
+    '/admin/documents',
+    '/admin/analytics',
+    '/admin/settings',
   ];
 
-  const isFullWidth = fullWidthRoutes.includes(location.pathname) || 
-                      location.pathname.endsWith('/notifications');
+  const isFullWidth =
+    fullWidthRoutes.includes(location.pathname) ||
+    location.pathname.endsWith('/notifications');
 
   return (
     <div className="flex min-h-screen bg-gray-50">
