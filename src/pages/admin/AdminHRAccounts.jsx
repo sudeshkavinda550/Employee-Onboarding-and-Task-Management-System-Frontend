@@ -7,16 +7,13 @@ import {
   CheckCircleIcon,
   EyeIcon,
   XMarkIcon,
+  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline';
 import { adminApi } from '../../services/api';
-const DEPARTMENTS = [
-  'Engineering', 'Sales', 'Marketing', 'Operations',
-  'HR', 'Finance', 'Product', 'Design',
-];
 
-const inputCls =
-  'w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm ' +
-  'focus:outline-none focus:border-purple-500 transition-colors bg-white';
+const DEPARTMENTS = ['Engineering', 'Sales', 'Marketing', 'Operations', 'HR', 'Finance', 'Product', 'Design'];
+
+const inputCls = 'w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-purple-500 transition-colors bg-white';
 
 const StatusBadge = ({ status }) =>
   status === 'active' ? (
@@ -30,24 +27,28 @@ const StatusBadge = ({ status }) =>
   );
 
 const AdminHRAccounts = () => {
-  const [accounts, setAccounts]       = useState([]);
-  const [loading, setLoading]         = useState(true);
-  const [search, setSearch]           = useState('');
-  const [showCreate, setShowCreate]   = useState(false);
-  const [viewRecord, setViewRecord]   = useState(null);
-  const [form, setForm]               = useState({ name: '', email: '', password: '', department: '' });
-  const [submitting, setSubmitting]   = useState(false);
-  const [error, setError]             = useState('');
+  const [accounts, setAccounts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [showCreate, setShowCreate] = useState(false);
+  const [viewRecord, setViewRecord] = useState(null);
+  const [form, setForm] = useState({ name: '', email: '', password: '', department: '' });
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
-  useEffect(() => { fetchAccounts(); }, []);
+  useEffect(() => {
+    fetchAccounts();
+  }, []);
 
   const fetchAccounts = async () => {
     setLoading(true);
     try {
       const res = await adminApi.getHRAccounts();
-      setAccounts(res.data);
+      const data = res.data || res;
+      setAccounts(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error(err);
+      console.error('Fetch HR accounts error:', err);
+      setError('Failed to load HR accounts');
     } finally {
       setLoading(false);
     }
@@ -56,16 +57,24 @@ const AdminHRAccounts = () => {
   const handleCreate = async (e) => {
     e.preventDefault();
     if (!form.name || !form.email || !form.password || !form.department) {
-      setError('All fields are required.'); return;
+      setError('All fields are required');
+      return;
     }
-    setSubmitting(true); setError('');
+    
+    if (form.password.length < 8) {
+      setError('Password must be at least 8 characters');
+      return;
+    }
+
+    setSubmitting(true);
+    setError('');
     try {
       await adminApi.createHRAccount(form);
       setShowCreate(false);
       setForm({ name: '', email: '', password: '', department: '' });
       fetchAccounts();
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to create account.');
+      setError(err.response?.data?.message || 'Failed to create HR account');
     } finally {
       setSubmitting(false);
     }
@@ -73,33 +82,46 @@ const AdminHRAccounts = () => {
 
   const handleToggleStatus = async (id, status) => {
     const action = status === 'active' ? 'suspend' : 'restore';
-    if (!window.confirm(`${action === 'suspend' ? 'Suspend' : 'Restore'} this HR account?`)) return;
+    const confirmMsg = status === 'active' 
+      ? 'Are you sure you want to suspend this HR account?' 
+      : 'Are you sure you want to restore this HR account?';
+    
+    if (!window.confirm(confirmMsg)) return;
+    
     try {
       await adminApi.updateHRStatus(id, action);
       fetchAccounts();
-    } catch { alert('Failed to update status.'); }
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to update status');
+    }
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Permanently delete this HR account? This cannot be undone.')) return;
+    if (!window.confirm('Permanently delete this HR account? This action cannot be undone.')) return;
+    
     try {
       await adminApi.deleteHRAccount(id);
       fetchAccounts();
-    } catch { alert('Failed to delete account.'); }
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to delete account');
+    }
   };
 
   const filtered = accounts.filter((a) =>
-    a.name.toLowerCase().includes(search.toLowerCase()) ||
-    a.email.toLowerCase().includes(search.toLowerCase()) ||
+    (a.name || '').toLowerCase().includes(search.toLowerCase()) ||
+    (a.email || '').toLowerCase().includes(search.toLowerCase()) ||
     (a.department || '').toLowerCase().includes(search.toLowerCase())
   );
 
   const initials = (name) =>
-    name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase();
+    (name || 'U').split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase();
+
+  const activeCount = accounts.filter((a) => a.status === 'active').length;
+  const suspendedCount = accounts.filter((a) => a.status === 'suspended').length;
+  const uniqueDepts = [...new Set(accounts.map((a) => a.department).filter(Boolean))].length;
 
   return (
     <div className="p-6 space-y-6">
-
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">HR Account Management</h1>
@@ -109,8 +131,7 @@ const AdminHRAccounts = () => {
         </div>
         <button
           onClick={() => { setShowCreate(true); setError(''); }}
-          className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white
-                     text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors"
+          className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors"
         >
           <UserPlusIcon className="h-4 w-4" />
           New HR Account
@@ -120,9 +141,9 @@ const AdminHRAccounts = () => {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
           { label: 'Total HR Managers', value: accounts.length, color: 'text-purple-600' },
-          { label: 'Active',     value: accounts.filter((a) => a.status === 'active').length,    color: 'text-emerald-600' },
-          { label: 'Suspended',  value: accounts.filter((a) => a.status === 'suspended').length, color: 'text-red-500' },
-          { label: 'Departments',value: [...new Set(accounts.map((a) => a.department).filter(Boolean))].length, color: 'text-amber-500' },
+          { label: 'Active', value: activeCount, color: 'text-emerald-600' },
+          { label: 'Suspended', value: suspendedCount, color: 'text-red-500' },
+          { label: 'Departments', value: uniqueDepts, color: 'text-amber-500' },
         ].map((s) => (
           <div key={s.label} className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
             <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide">{s.label}</p>
@@ -137,18 +158,14 @@ const AdminHRAccounts = () => {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search HR accounts…"
-          className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm
-                     focus:outline-none focus:border-purple-500 transition-colors"
+          className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-purple-500 transition-colors"
         />
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-x-auto">
-        <div className="grid grid-cols-[2fr_1.4fr_1fr_1fr_1fr_1.4fr] px-5 py-3
-                        bg-gray-50 border-b border-gray-100 min-w-[700px]">
+        <div className="grid grid-cols-[2fr_1.4fr_1fr_1fr_1fr_1.4fr] px-5 py-3 bg-gray-50 border-b border-gray-100 min-w-[700px]">
           {['HR Manager', 'Department', 'Employees', 'Last Login', 'Status', 'Actions'].map((h) => (
-            <span key={h} className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-              {h}
-            </span>
+            <span key={h} className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{h}</span>
           ))}
         </div>
 
@@ -161,24 +178,23 @@ const AdminHRAccounts = () => {
         ) : (
           filtered.map((hr, i) => (
             <div
-              key={hr._id}
-              className={`grid grid-cols-[2fr_1.4fr_1fr_1fr_1fr_1.4fr] px-5 py-4 items-center
-                          hover:bg-gray-50 transition-colors min-w-[700px]
-                          ${i < filtered.length - 1 ? 'border-b border-gray-50' : ''}`}
+              key={hr.id || hr._id}
+              className={`grid grid-cols-[2fr_1.4fr_1fr_1fr_1fr_1.4fr] px-5 py-4 items-center hover:bg-gray-50 transition-colors min-w-[700px] ${
+                i < filtered.length - 1 ? 'border-b border-gray-50' : ''
+              }`}
             >
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-purple-100 flex items-center justify-center
-                                text-sm font-bold text-purple-700 flex-shrink-0">
+                <div className="w-9 h-9 rounded-xl bg-purple-100 flex items-center justify-center text-sm font-bold text-purple-700 flex-shrink-0">
                   {initials(hr.name)}
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-gray-800">{hr.name}</p>
-                  <p className="text-xs text-gray-400">{hr.email}</p>
+                  <p className="text-sm font-semibold text-gray-800">{hr.name || 'Unnamed'}</p>
+                  <p className="text-xs text-gray-400">{hr.email || 'No email'}</p>
                 </div>
               </div>
 
               <span className="text-sm text-gray-600">{hr.department || '—'}</span>
-              <span className="text-sm font-semibold text-indigo-600">{hr.employeeCount ?? 0}</span>
+              <span className="text-sm font-semibold text-indigo-600">{hr.employeeCount || 0}</span>
               <span className="text-xs text-gray-400">
                 {hr.lastLogin ? new Date(hr.lastLogin).toLocaleDateString() : 'Never'}
               </span>
@@ -194,7 +210,7 @@ const AdminHRAccounts = () => {
                   <EyeIcon className="h-4 w-4" />
                 </button>
                 <button
-                  onClick={() => handleToggleStatus(hr._id, hr.status)}
+                  onClick={() => handleToggleStatus(hr.id || hr._id, hr.status)}
                   title={hr.status === 'active' ? 'Suspend' : 'Restore'}
                   className={`p-1.5 rounded-lg transition-colors ${
                     hr.status === 'active'
@@ -205,7 +221,7 @@ const AdminHRAccounts = () => {
                   <NoSymbolIcon className="h-4 w-4" />
                 </button>
                 <button
-                  onClick={() => handleDelete(hr._id)}
+                  onClick={() => handleDelete(hr.id || hr._id)}
                   title="Delete"
                   className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                 >
@@ -231,15 +247,16 @@ const AdminHRAccounts = () => {
             </div>
 
             {error && (
-              <div className="bg-red-50 text-red-600 text-sm px-4 py-2.5 rounded-xl mb-4">
-                {error}
+              <div className="bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-2.5 rounded-xl mb-4 flex items-start gap-2">
+                <ExclamationTriangleIcon className="h-5 w-5 flex-shrink-0 mt-0.5" />
+                <span>{error}</span>
               </div>
             )}
 
             <form onSubmit={handleCreate} className="space-y-4">
               {[
-                { label: 'Full Name',          key: 'name',     type: 'text',     placeholder: 'Jane Smith' },
-                { label: 'Email Address',      key: 'email',    type: 'email',    placeholder: 'jane@company.com' },
+                { label: 'Full Name', key: 'name', type: 'text', placeholder: 'Jane Smith' },
+                { label: 'Email Address', key: 'email', type: 'email', placeholder: 'jane@company.com' },
                 { label: 'Temporary Password', key: 'password', type: 'password', placeholder: 'Min. 8 characters' },
               ].map(({ label, key, type, placeholder }) => (
                 <div key={key}>
@@ -252,6 +269,7 @@ const AdminHRAccounts = () => {
                     onChange={(e) => setForm({ ...form, [key]: e.target.value })}
                     placeholder={placeholder}
                     className={inputCls}
+                    required
                   />
                 </div>
               ))}
@@ -264,6 +282,7 @@ const AdminHRAccounts = () => {
                   value={form.department}
                   onChange={(e) => setForm({ ...form, department: e.target.value })}
                   className={inputCls}
+                  required
                 >
                   <option value="">Select department</option>
                   {DEPARTMENTS.map((d) => (
@@ -276,16 +295,14 @@ const AdminHRAccounts = () => {
                 <button
                   type="button"
                   onClick={() => setShowCreate(false)}
-                  className="flex-1 border border-gray-200 text-gray-600 font-semibold text-sm
-                             py-2.5 rounded-xl hover:bg-gray-50 transition-colors"
+                  className="flex-1 border border-gray-200 text-gray-600 font-semibold text-sm py-2.5 rounded-xl hover:bg-gray-50 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-semibold
-                             text-sm py-2.5 rounded-xl transition-colors disabled:opacity-60"
+                  className="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-semibold text-sm py-2.5 rounded-xl transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {submitting ? 'Creating…' : 'Create Account'}
                 </button>
@@ -309,13 +326,12 @@ const AdminHRAccounts = () => {
             </div>
 
             <div className="flex items-center gap-4 mb-6 p-4 bg-gray-50 rounded-xl">
-              <div className="w-14 h-14 rounded-2xl bg-purple-100 flex items-center justify-center
-                              text-xl font-bold text-purple-700">
+              <div className="w-14 h-14 rounded-2xl bg-purple-100 flex items-center justify-center text-xl font-bold text-purple-700">
                 {initials(viewRecord.name)}
               </div>
               <div>
-                <p className="font-bold text-gray-900">{viewRecord.name}</p>
-                <p className="text-sm text-gray-500">{viewRecord.email}</p>
+                <p className="font-bold text-gray-900">{viewRecord.name || 'Unnamed'}</p>
+                <p className="text-sm text-gray-500">{viewRecord.email || 'No email'}</p>
                 <div className="mt-1">
                   <StatusBadge status={viewRecord.status} />
                 </div>
@@ -323,10 +339,10 @@ const AdminHRAccounts = () => {
             </div>
 
             {[
-              ['Department',        viewRecord.department || '—'],
-              ['Employees Managed', viewRecord.employeeCount ?? 0],
-              ['Last Login',        viewRecord.lastLogin ? new Date(viewRecord.lastLogin).toLocaleString() : 'Never'],
-              ['Account Created',   viewRecord.createdAt ? new Date(viewRecord.createdAt).toLocaleDateString() : '—'],
+              ['Department', viewRecord.department || '—'],
+              ['Employees Managed', viewRecord.employeeCount || 0],
+              ['Last Login', viewRecord.lastLogin ? new Date(viewRecord.lastLogin).toLocaleString() : 'Never'],
+              ['Account Created', viewRecord.createdAt ? new Date(viewRecord.createdAt).toLocaleDateString() : '—'],
             ].map(([k, v]) => (
               <div key={k} className="flex justify-between py-2.5 border-b border-gray-50 last:border-0">
                 <span className="text-sm text-gray-500">{k}</span>
