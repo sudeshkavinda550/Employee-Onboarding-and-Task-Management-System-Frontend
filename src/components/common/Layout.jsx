@@ -8,6 +8,10 @@ const Layout = () => {
   const { user } = useAuth();
   const location = useLocation();
 
+  const publicRoutes = ['/', '/login', '/register', '/forgot-password', '/reset-password'];
+  
+  const isPublicRoute = publicRoutes.includes(location.pathname);
+
   const fullWidthRoutes = [
     '/employee/dashboard',
     '/employee/tasks',
@@ -32,6 +36,10 @@ const Layout = () => {
   const isFullWidth =
     fullWidthRoutes.includes(location.pathname) ||
     location.pathname.endsWith('/notifications');
+
+  if (isPublicRoute) {
+    return <Outlet />;
+  }
 
   return (
     <div className="flex min-h-screen bg-gray-50">
