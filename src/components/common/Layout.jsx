@@ -9,7 +9,6 @@ const Layout = () => {
   const location = useLocation();
 
   const publicRoutes = ['/', '/login', '/register', '/forgot-password', '/reset-password'];
-  
   const isPublicRoute = publicRoutes.includes(location.pathname);
 
   const fullWidthRoutes = [
@@ -24,6 +23,7 @@ const Layout = () => {
     '/hr/templates/create',
     '/hr/employees',
     '/hr/analytics',
+    '/hr/AIAssistant',
     '/admin/dashboard',
     '/admin/hr',
     '/admin/employees',
@@ -35,31 +35,29 @@ const Layout = () => {
 
   const isFullWidth =
     fullWidthRoutes.includes(location.pathname) ||
-    location.pathname.endsWith('/notifications');
+    location.pathname.endsWith('/notifications') ||
+    location.pathname.toLowerCase().includes('/aiassistant') ||
+    location.pathname.toLowerCase().includes('/ai-assistant');
 
   if (isPublicRoute) {
     return <Outlet />;
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex flex-col min-h-screen" style={{ background: '#f1f5f9' }}>
       {user && <Sidebar />}
-
-      <div className="flex-1 flex flex-col">
-        <Navbar />
-
-        <main className={`flex-1 transition-all duration-300 ${!isFullWidth ? 'pt-4' : ''}`}>
-          {isFullWidth ? (
-            <Outlet />
-          ) : (
-            <div className="py-6">
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
-                <Outlet />
-              </div>
+      <Navbar />
+      <main className="flex-1">
+        {isFullWidth ? (
+          <Outlet />
+        ) : (
+          <div className="py-6">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
+              <Outlet />
             </div>
-          )}
-        </main>
-      </div>
+          </div>
+        )}
+      </main>
     </div>
   );
 };

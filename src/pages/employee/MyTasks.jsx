@@ -3,7 +3,7 @@ import TaskChecklist from '../../components/onboarding/TaskChecklist';
 
 const MyTasks = () => {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 w-full">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:bg-gray-900 dark:from-gray-900 dark:via-gray-900 dark:to-gray-900">
       <div className="space-y-6 p-6">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">

@@ -210,7 +210,7 @@ const EmployeeDashboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:bg-gray-900 dark:from-gray-900 dark:via-gray-900 dark:to-gray-900">
       <style>{`
         @keyframes slideUp {
           from {
@@ -256,7 +256,7 @@ const EmployeeDashboard = () => {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h1 className="text-4xl font-bold text-gray-900 mb-2 tracking-tight">
-              Welcome Back! 👋
+              Welcome Back!
             </h1>
             <p className="text-gray-600 text-lg">
               Here's your onboarding progress overview
