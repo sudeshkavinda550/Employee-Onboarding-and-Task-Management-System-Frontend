@@ -25,11 +25,12 @@ export const ONBOARDING_TOOLS = [
     type: 'function',
     function: {
       name: 'get_employee_by_id',
-      description: 'Get full details of one employee by their UUID.',
+      // FIXED: now accepts both UUID and EMP-format codes like EMP2602521
+      description: 'Get full details of one employee. Accepts a UUID or EMP-format ID like EMP2602521.',
       parameters: {
         type: 'object',
         properties: {
-          employee_id: { type: 'string', description: 'UUID from the users table' },
+          employee_id: { type: 'string', description: 'UUID or EMP-format code e.g. EMP2602521' },
         },
         required: ['employee_id'],
       },
@@ -53,12 +54,12 @@ export const ONBOARDING_TOOLS = [
     type: 'function',
     function: {
       name: 'get_employee_progress',
-      description:
-        'Get onboarding progress for a specific employee — total tasks, completed tasks, percent done, status.',
+      // FIXED: now accepts both UUID and EMP-format codes
+      description: 'Get onboarding progress for a specific employee — total tasks, completed tasks, percent done, status. Accepts UUID or EMP-format ID.',
       parameters: {
         type: 'object',
         properties: {
-          employee_id: { type: 'string', description: 'UUID of the employee' },
+          employee_id: { type: 'string', description: 'UUID or EMP-format code e.g. EMP2602521' },
         },
         required: ['employee_id'],
       },
@@ -68,12 +69,13 @@ export const ONBOARDING_TOOLS = [
     type: 'function',
     function: {
       name: 'get_employee_tasks',
+      // FIXED: now accepts both UUID and EMP-format codes
       description:
-        'Get the task list for one employee from employee_tasks joined with tasks. Filter by status to find pending/overdue/completed tasks.',
+        'Get the task list for one employee. Filter by status to find pending/overdue/completed tasks. Accepts UUID or EMP-format ID.',
       parameters: {
         type: 'object',
         properties: {
-          employee_id: { type: 'string', description: 'UUID of the employee' },
+          employee_id: { type: 'string', description: 'UUID or EMP-format code e.g. EMP2602521' },
           status: {
             type: 'string',
             enum: ['pending', 'in_progress', 'completed', 'overdue'],
@@ -125,12 +127,13 @@ export const ONBOARDING_TOOLS = [
     type: 'function',
     function: {
       name: 'get_employee_documents',
+      // FIXED: now accepts both UUID and EMP-format codes
       description:
-        'Get documents uploaded by an employee from the documents table. Filter by status to find pending/approved/rejected.',
+        'Get documents uploaded by an employee. Filter by status to find pending/approved/rejected. Accepts UUID or EMP-format ID.',
       parameters: {
         type: 'object',
         properties: {
-          employee_id: { type: 'string', description: 'UUID of the employee' },
+          employee_id: { type: 'string', description: 'UUID or EMP-format code e.g. EMP2602521' },
           status: {
             type: 'string',
             enum: ['pending', 'approved', 'rejected'],
@@ -145,15 +148,16 @@ export const ONBOARDING_TOOLS = [
     type: 'function',
     function: {
       name: 'send_reminder',
+      // FIXED: enforces ONE call per employee with ALL tasks combined in one message
       description:
-        'Send a reminder notification to an employee. IMPORTANT: First use find_employee_by_name to get the UUID, then call get_employee_tasks to see pending tasks, then send this reminder.',
+        'Send ONE reminder to an employee. You MUST call get_employee_tasks first and use the REAL task titles in the message. NEVER use placeholders like TASKS_FROM_GET_EMPLOYEE_TASKS. NEVER call this more than once per employee.',
       parameters: {
         type: 'object',
         properties: {
-          employee_id: { type: 'string', description: 'UUID of the employee (must be a valid UUID, not a name)' },
+          employee_id: { type: 'string', description: 'UUID or EMP-format code e.g. EMP2602521' },
           message: {
             type: 'string',
-            description: 'Reminder message — be specific, list the pending tasks by name.',
+            description: 'Message with REAL task names only. Example: "Please complete: Sign NDA, Upload passport, Complete tax form". Never use placeholder text.',
           },
         },
         required: ['employee_id', 'message'],
@@ -162,8 +166,48 @@ export const ONBOARDING_TOOLS = [
   },
 ];
 
-// Get API URL from environment 
+// Get API URL from environment
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api/v1';
+
+// ── EMPLOYEE CACHE: avoids re-fetching all employees on every resolveToUUID call ──
+// Saves ~2000 tokens per multi-employee request (e.g. sending bulk reminders)
+let _employeeCache     = null;
+let _employeeCacheTime = 0;
+const CACHE_TTL        = 30_000; // reuse for 30 seconds, then refresh
+
+// ── DUPLICATE REMINDER GUARD: prevents sending 2+ reminders to same employee ──
+const _remindersSent = new Set();
+
+export function resetReminderGuard() {
+  // Called at start of every new user message — clears both guard and cache
+  _remindersSent.clear();
+  _employeeCache     = null; // force fresh fetch on next request
+  _employeeCacheTime = 0;
+}
+
+// ── KEY FIX: Resolves EMP-format IDs (e.g. EMP2602521) to real UUIDs ─────────
+// Uses cache so multiple tools in one request share one fetch instead of many
+async function resolveToUUID(idOrCode) {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  // Already a valid UUID — no lookup needed
+  if (uuidRegex.test(idOrCode)) return idOrCode;
+
+  // Use cache if fresh — avoids redundant API calls within the same request
+  if (!_employeeCache || Date.now() - _employeeCacheTime > CACHE_TTL) {
+    const allRes       = await agentGetAllEmployees();
+    _employeeCache     = allRes.data?.data || allRes.data;
+    _employeeCacheTime = Date.now();
+  }
+
+  const match = _employeeCache?.find(
+    e => e.employee_id?.toLowerCase() === idOrCode.toLowerCase()
+  );
+
+  if (!match) throw new Error(`No employee found with ID code "${idOrCode}". Try find_employee_by_name instead.`);
+
+  return match.id; // return the real UUID
+}
 
 export async function executeTool(name, args) {
   try {
@@ -177,35 +221,44 @@ export async function executeTool(name, args) {
     if (name === 'get_all_employees') {
       const res       = await agentGetAllEmployees();
       const employees = res.data?.data || res.data;
+      // Also populate cache so resolveToUUID doesn't need a separate fetch
+      _employeeCache     = employees;
+      _employeeCacheTime = Date.now();
       if (!employees?.length) return 'No employees found.';
+      // TRIMMED output: removed redundant fields to save tokens
       return employees
         .map(e =>
-          `• ${e.name} | ${e.position || 'N/A'} | ${e.department_name || 'N/A'} | Started: ${e.start_date?.slice(0, 10) || 'N/A'} | Status: ${e.onboarding_status} | ID: ${e.id}`
+          `${e.name} | ${e.position || 'N/A'} | ${e.department_name || 'N/A'} | ${e.onboarding_status} | ID: ${e.id}`
         )
         .join('\n');
     }
 
     if (name === 'find_employee_by_name') {
-      const res       = await agentGetAllEmployees(); 
-      const employees = res.data?.data || res.data;
-      
+      // Use cache if available — avoids a second full fetch
+      if (!_employeeCache || Date.now() - _employeeCacheTime > CACHE_TTL) {
+        const res      = await agentGetAllEmployees();
+        _employeeCache     = res.data?.data || res.data;
+        _employeeCacheTime = Date.now();
+      }
+      const employees = _employeeCache;
+
       if (!employees?.length) return 'No employees found.';
-      
+
       // Case-insensitive partial name search
       const searchName = args.name.toLowerCase();
-      const matches = employees.filter(e => 
+      const matches = employees.filter(e =>
         e.name.toLowerCase().includes(searchName)
       );
-      
+
       if (matches.length === 0) {
         return `No employees found with name containing "${args.name}".`;
       }
-      
+
       if (matches.length === 1) {
         const e = matches[0];
         return `Found employee:\n• Name: ${e.name}\n• ID: ${e.id}\n• Position: ${e.position || 'N/A'}\n• Department: ${e.department_name || 'N/A'}`;
       }
-      
+
       // Multiple matches
       return `Found ${matches.length} employees:\n` + matches
         .map(e => `• ${e.name} | ID: ${e.id} | ${e.position || 'N/A'} | ${e.department_name || 'N/A'}`)
@@ -213,7 +266,10 @@ export async function executeTool(name, args) {
     }
 
     if (name === 'get_employee_by_id') {
-      const res = await agentGetEmployeeById(args.employee_id);
+      // STEP 1: Resolve EMP code → UUID if needed
+      const uuid = await resolveToUUID(args.employee_id);
+      // STEP 2: Fetch employee with the real UUID
+      const res = await agentGetEmployeeById(uuid);
       const e   = res.data?.data || res.data;
       return [
         `Name: ${e.name}`,
@@ -230,7 +286,10 @@ export async function executeTool(name, args) {
     }
 
     if (name === 'get_employee_progress') {
-      const res = await agentGetEmployeeProgress(args.employee_id);
+      // STEP 1: Resolve EMP code → UUID if needed
+      const uuid = await resolveToUUID(args.employee_id);
+      // STEP 2: Fetch progress with real UUID
+      const res = await agentGetEmployeeProgress(uuid);
       const p   = res.data?.data || res.data;
       return [
         `Employee: ${p.name}`,
@@ -241,7 +300,10 @@ export async function executeTool(name, args) {
     }
 
     if (name === 'get_employee_tasks') {
-      const res   = await agentGetEmployeeTasks(args.employee_id, args.status || null);
+      // STEP 1: Resolve EMP code → UUID if needed
+      const uuid  = await resolveToUUID(args.employee_id);
+      // STEP 2: Fetch tasks with real UUID
+      const res   = await agentGetEmployeeTasks(uuid, args.status || null);
       const tasks = res.data?.data || res.data;
       if (!tasks?.length)
         return args.status
@@ -293,7 +355,10 @@ export async function executeTool(name, args) {
     }
 
     if (name === 'get_employee_documents') {
-      const res  = await agentGetDocuments(args.employee_id, args.status || null);
+      // STEP 1: Resolve EMP code → UUID if needed
+      const uuid = await resolveToUUID(args.employee_id);
+      // STEP 2: Fetch documents with real UUID
+      const res  = await agentGetDocuments(uuid, args.status || null);
       const docs = res.data?.data || res.data;
       if (!docs?.length) return 'No documents found for this employee.';
       return docs
@@ -305,13 +370,32 @@ export async function executeTool(name, args) {
     }
 
     if (name === 'send_reminder') {
-      // Validate that employee_id looks like a UUID
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (!uuidRegex.test(args.employee_id)) {
-        return `Error: "${args.employee_id}" is not a valid UUID. Please use find_employee_by_name first to get the correct UUID.`;
+      // STEP 1: Resolve EMP code → UUID if needed
+      const uuid = await resolveToUUID(args.employee_id);
+
+      // STEP 2: DUPLICATE GUARD — block if already sent to this employee this request
+      if (_remindersSent.has(uuid)) {
+        return `Reminder already sent to this employee in this request. Skipping duplicate.`;
       }
-      
-      const res  = await agentSendReminder(args.employee_id, args.message);
+
+      // STEP 3: SANITIZE — block placeholder text the LLM sometimes sends instead of real tasks
+      const placeholderPatterns = [
+        /TASKS_FROM_GET_EMPLOYEE_TASKS/i,
+        /\[task[s]?\s*(list|names?)?\]/i,
+        /\{task[s]?\}/i,
+        /<task[s]?>/i,
+        /pending task[s]?\s*:\s*$/i, // message ends with colon and no actual tasks
+      ];
+      const hasPlaceholder = placeholderPatterns.some(p => p.test(args.message));
+      if (hasPlaceholder) {
+        // Return an instruction so the LLM corrects itself
+        return `ERROR: Message contains placeholder text instead of real task names. You must call get_employee_tasks first, read the actual task titles from the result, then call send_reminder again with the real task names in the message.`;
+      }
+
+      _remindersSent.add(uuid); // mark as sent
+
+      // STEP 4: Send the reminder with real task names
+      const res  = await agentSendReminder(uuid, args.message);
       const data = res.data?.data || res.data;
       return `✅ Reminder sent to ${data.sent_to_name} (${data.sent_to_email})\nMessage: "${args.message}"`;
     }
@@ -324,7 +408,7 @@ export async function executeTool(name, args) {
       handleAuthError();
       return `Authentication failed. Please log in again.`;
     }
-    
+
     // Graceful error — AI reports it to HR instead of crashing
     const msg = err.response?.data?.message || err.message;
     return `Error from ${name}: ${msg}. Check that your backend is running at ${API_BASE_URL}.`;
@@ -335,7 +419,7 @@ export async function executeTool(name, args) {
 function handleAuthError() {
   localStorage.removeItem('token');
   localStorage.removeItem('user');
-  
+
   if (!window.location.pathname.includes('/login')) {
     window.location.href = '/login';
   }
@@ -343,14 +427,14 @@ function handleAuthError() {
 
 // ── UI metadata ───────────────────────────────────────────────────────────────
 export const TOOL_META = {
-  get_all_employees:        { icon: '👥', label: 'Loading employees',      color: '#0891b2' },
-  find_employee_by_name:    { icon: '🔍', label: 'Finding employee',       color: '#2563eb' },
+  get_all_employees:        { icon: '👥', label: 'Loading employees',       color: '#0891b2' },
+  find_employee_by_name:    { icon: '🔍', label: 'Finding employee',        color: '#2563eb' },
   get_employee_by_id:       { icon: '👤', label: 'Getting employee details', color: '#2563eb' },
-  get_employee_progress:    { icon: '📊', label: 'Checking progress',      color: '#2563eb' },
-  get_employee_tasks:       { icon: '📋', label: 'Fetching tasks',         color: '#d97706' },
-  get_employees_by_status:  { icon: '⚠️', label: 'Filtering by status',   color: '#dc2626' },
-  get_company_analytics:    { icon: '📈', label: 'Computing stats',        color: '#7c3aed' },
-  get_department_analytics: { icon: '🏢', label: 'Department breakdown',   color: '#7c3aed' },
-  get_employee_documents:   { icon: '📂', label: 'Fetching documents',     color: '#0891b2' },
-  send_reminder:            { icon: '📧', label: 'Sending reminder',       color: '#d97706' },
+  get_employee_progress:    { icon: '📊', label: 'Checking progress',       color: '#2563eb' },
+  get_employee_tasks:       { icon: '📋', label: 'Fetching tasks',          color: '#d97706' },
+  get_employees_by_status:  { icon: '⚠️', label: 'Filtering by status',    color: '#dc2626' },
+  get_company_analytics:    { icon: '📈', label: 'Computing stats',         color: '#7c3aed' },
+  get_department_analytics: { icon: '🏢', label: 'Department breakdown',    color: '#7c3aed' },
+  get_employee_documents:   { icon: '📂', label: 'Fetching documents',      color: '#0891b2' },
+  send_reminder:            { icon: '📧', label: 'Sending reminder',        color: '#d97706' },
 };

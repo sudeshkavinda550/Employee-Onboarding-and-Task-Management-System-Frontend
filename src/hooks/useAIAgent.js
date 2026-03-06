@@ -1,26 +1,125 @@
 import { useState } from 'react';
-import { ONBOARDING_TOOLS, executeTool } from '../tools/onboardingTools';
+import { ONBOARDING_TOOLS, executeTool, resetReminderGuard } from '../tools/onboardingTools';
+
+// ── GLOBAL RESPONSE SANITIZER ─────────────────────────────────────────────────
+// Strips ALL unwanted patterns from every AI response before showing to the user.
+// Handles: placeholders, raw UUIDs, internal tool names, debug text, markdown artifacts
+function sanitizeResponse(text) {
+  if (!text) return text;
+
+  let clean = text;
+
+  // 1. Remove placeholder tokens the LLM sometimes forgets to replace
+  clean = clean.replace(/TASKS_FROM_GET_EMPLOYEE_TASKS/gi, '');
+  clean = clean.replace(/TASK_LIST_FROM_TOOL/gi, '');
+  clean = clean.replace(/\[task[s]?\s*(list|names?|here)?\]/gi, '');
+  clean = clean.replace(/\{task[s]?\}/gi, '');
+  clean = clean.replace(/<task[s]?>/gi, '');
+  clean = clean.replace(/\[PENDING_TASKS\]/gi, '');
+  clean = clean.replace(/\[INSERT[^\]]*\]/gi, '');
+
+  // 2. Remove raw UUIDs leaked into user-facing text
+  // Keep UUIDs only if they appear after "ID:" label — strip bare ones
+  clean = clean.replace(/(?<!\bID[:\s])[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '');
+
+  // 3. Remove internal tool/function names that leaked into response
+  clean = clean.replace(/\bget_employee_tasks\b/g, 'task lookup');
+  clean = clean.replace(/\bget_employee_by_id\b/g, 'employee lookup');
+  clean = clean.replace(/\bget_all_employees\b/g, 'employee list');
+  clean = clean.replace(/\bget_employee_progress\b/g, 'progress check');
+  clean = clean.replace(/\bget_employees_by_status\b/g, 'status filter');
+  clean = clean.replace(/\bget_company_analytics\b/g, 'company analytics');
+  clean = clean.replace(/\bget_department_analytics\b/g, 'department analytics');
+  clean = clean.replace(/\bget_employee_documents\b/g, 'document lookup');
+  clean = clean.replace(/\bfind_employee_by_name\b/g, 'employee search');
+  clean = clean.replace(/\bsend_reminder\b/g, 'reminder');
+
+  // 4. Remove raw JSON blobs that leaked into response
+  clean = clean.replace(/```json[\s\S]*?```/gi, '');
+  clean = clean.replace(/\{"employee_id":[^}]+\}/g, '');
+
+  // 5. Remove "function call" / "tool call" debug language
+  clean = clean.replace(/I(?:'ll| will) (?:now )?call(?: the)? \w+ (?:function|tool)[^\n]*/gi, '');
+  clean = clean.replace(/Calling(?: the)? \w+ (?:function|tool)[^\n]*/gi, '');
+  clean = clean.replace(/Using(?: the)? \w+ (?:function|tool)[^\n]*/gi, '');
+  clean = clean.replace(/\bfunction call\b/gi, '');
+  clean = clean.replace(/\btool call\b/gi, '');
+  clean = clean.replace(/\[tool_call\]/gi, '');
+
+  // 6. Remove repeated colons / broken sentence fragments left by placeholder removal
+  clean = clean.replace(/:\s*,/g, ':');          // "tasks: , Task2" → "tasks: Task2"
+  clean = clean.replace(/:\s*\./g, '.');          // "tasks:." → "."
+  clean = clean.replace(/,\s*,/g, ',');           // double commas
+  clean = clean.replace(/\n{3,}/g, '\n\n');       // more than 2 blank lines → 2
+  clean = clean.replace(/[ \t]{2,}/g, ' ');       // multiple spaces → one
+
+  // 7. Clean up lines that are now empty after stripping
+  clean = clean
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => line.length > 0)
+    .join('\n');
+
+  return clean.trim();
+}
+
+// ── FRIENDLY ERROR MESSAGES ───────────────────────────────────────────────────
+// Converts raw API/technical errors into clean user-facing messages
+function sanitizeError(text) {
+  if (!text) return text;
+
+  // Groq rate limit
+  if (text.includes('Rate limit reached') || text.includes('rate_limit_exceeded')) {
+    const waitMatch = text.match(/try again in (\d+m[\d.]+s)/i);
+    const wait = waitMatch ? ` Please wait ${waitMatch[1]} and try again.` : ' Please wait a few minutes and try again.';
+    return `⚠️ AI usage limit reached for today.${wait}`;
+  }
+
+  // Auth errors
+  if (text.includes('401') || text.includes('Unauthorized') || text.includes('Authentication failed')) {
+    return '🔒 Session expired. Please log in again.';
+  }
+
+  // Backend down
+  if (text.includes('ECONNREFUSED') || text.includes('localhost:5000') || text.includes('Network Error')) {
+    return '🔌 Cannot reach the backend server. Make sure it is running on port 5000.';
+  }
+
+  // Generic Groq API error — strip the org ID and technical details
+  if (text.includes('Groq API error')) {
+    return '⚠️ AI service error. Please try again in a moment.';
+  }
+
+  return text;
+}
 
 const SYSTEM_PROMPT = `You are an intelligent HR Onboarding Assistant connected to a live PostgreSQL employee database via a secure REST API.
 
 You have tools to query real employee data. ALWAYS use tools — never guess or invent data.
 
-CRITICAL RULES FOR UUIDs:
-- Employee IDs are UUIDs (format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
-- NEVER use a name as an employee_id - always use find_employee_by_name first to get the UUID
-- When a user says "Send reminder to John", you must:
-  1. Call find_employee_by_name with "John" to get their UUID
-  2. Call get_employee_tasks with that UUID to see what's pending
-  3. Formulate a specific message with the actual pending tasks
-  4. Call send_reminder with the UUID and your specific message
+RESPONSE RULES — follow strictly:
+- Respond in plain, friendly English only — no technical terms, no function names, no UUIDs, no JSON
+- Never mention tool names like get_employee_tasks, send_reminder, get_all_employees in your response
+- Never include raw IDs or UUIDs in your response to the user
+- Never use placeholder text — always wait for tool results and use the real data
+
+EMPLOYEE ID HANDLING:
+- Tools accept either a UUID or an EMP-format code like EMP2602521 — pass as-is
+- If you only have a name, use find_employee_by_name first
+
+SENDING REMINDERS — follow these steps exactly:
+1. Call get_employee_tasks to get the employee's real pending task list
+2. Read the actual task titles from the result
+3. Write the message using ONLY those real task titles — example: "Please complete: Sign NDA, Upload ID, Complete tax form"
+4. Call send_reminder ONCE with that message — never use placeholders
 
 RULES:
-- When asked about one person, call find_employee_by_name first, then get_employee_progress AND get_employee_tasks
-- When asked who is behind or overdue, call get_employees_by_status with "overdue", then "not_started"
-- When asked for a company overview, call get_company_analytics
-- Before sending a reminder, ALWAYS find the UUID first, then get their pending tasks
-- Format responses with bullet points when listing items
-- If a tool returns an error, explain clearly and suggest checking the backend
+- Minimize tool calls — only call what is needed
+- NEVER call send_reminder more than once per employee per request
+- When asked who is overdue, call get_employees_by_status ONCE
+- When asked for company overview, call get_company_analytics ONCE
+- Format lists with bullet points
+- If something fails, explain it simply without technical details
 `;
 
 export function useAIAgent() {
@@ -64,12 +163,15 @@ Ask me things like:
 
     setThinking(true);
 
+    // RESET GUARD: clear reminder tracking and employee cache for this new request
+    resetReminderGuard();
+
     const updatedHistory = [...history, { role: 'user', content: userText }];
     let workHistory = [...updatedHistory];
     const steps = [];
     let finalText = '';
 
-    const MAX_LOOPS = 6;
+    const MAX_LOOPS = 4; // prevents runaway tool chains
 
     try {
 
@@ -82,9 +184,9 @@ Ask me things like:
             'Authorization': `Bearer ${API_KEY}`
           },
           body: JSON.stringify({
-            model: "llama-3.3-70b-versatile",  
+            model: "llama-3.3-70b-versatile",
             temperature: 0.2,
-            max_tokens: 1024,
+            max_tokens: 512,
             tools: ONBOARDING_TOOLS,
             tool_choice: "auto",
             messages: [
@@ -96,22 +198,23 @@ Ask me things like:
 
         const data = await res.json();
 
+        // Handle API-level errors with friendly messages
         if (!res.ok) {
-          finalText = `Groq API error: ${data.error?.message || res.status}`;
+          finalText = sanitizeError(`Groq API error: ${data.error?.message || res.status}`);
           break;
         }
 
         const aiMsg = data?.choices?.[0]?.message;
 
         if (!aiMsg) {
-          finalText = "AI returned an empty response.";
+          finalText = "No response generated. Please try again.";
           break;
         }
 
-        // No tool calls → final answer
+        // No tool calls → final answer — sanitize before storing
         if (!aiMsg.tool_calls?.length) {
-
-          finalText = aiMsg.content || "No response generated.";
+          // SANITIZE: clean the final response before showing to user
+          finalText = sanitizeResponse(aiMsg.content || "No response generated.");
 
           workHistory.push({
             role: "assistant",
@@ -160,14 +263,8 @@ Ask me things like:
       }
 
     } catch (err) {
-
-      finalText = `Network error: ${err.message}
-
-Check:
-1. Internet connection
-2. Groq API key
-3. Backend running at http://localhost:5000`;
-
+      // Friendly network error
+      finalText = sanitizeError(err.message) || '⚠️ Something went wrong. Please check your connection and try again.';
     }
 
     setMessages(prev => [
@@ -175,7 +272,8 @@ Check:
       {
         id: Date.now() + 1,
         role: "ai",
-        text: finalText,
+        // Final sanitize pass — catches anything that slipped through
+        text: sanitizeResponse(sanitizeError(finalText)),
         steps
       }
     ]);
