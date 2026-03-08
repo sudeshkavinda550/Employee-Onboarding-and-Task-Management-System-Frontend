@@ -1,622 +1,380 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { employeeApi, taskApi, documentApi } from '../../api';
-import { 
-  ChartBarIcon, 
-  DocumentTextIcon, 
-  ClockIcon, 
-  CheckCircleIcon,
-  ExclamationCircleIcon,
-  ArrowTrendingUpIcon,
-  SparklesIcon,
-  CalendarIcon,
-  BellIcon,
-  ArrowRightIcon
+import { taskApi, documentApi } from '../../api';
+import {
+  ChartBarIcon, DocumentTextIcon, ClockIcon, CheckCircleIcon,
+  ExclamationCircleIcon, ArrowTrendingUpIcon, SparklesIcon,
+  CalendarIcon, BellIcon, ArrowRightIcon, ChartPieIcon,
 } from '@heroicons/react/24/outline';
 import { toast } from 'react-toastify';
 
+const getPriorityStyle = (p) => ({ high: { bg: '#fee2e2', color: '#dc2626' }, medium: { bg: '#fef9c3', color: '#a16207' }, low: { bg: '#dcfce7', color: '#15803d' } }[p?.toLowerCase()] || { bg: '#f1f5f9', color: '#475569' });
+const getStatusStyle   = (s) => ({ approved: { bg: '#dcfce7', color: '#15803d' }, rejected: { bg: '#fee2e2', color: '#dc2626' }, pending: { bg: '#fef9c3', color: '#a16207' } }[s?.toLowerCase()] || { bg: '#f1f5f9', color: '#475569' });
+
+const formatDate   = (d) => { if (!d) return 'N/A'; try { return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); } catch { return 'N/A'; } };
+const getDaysUntil = (d) => { if (!d) return null; return Math.ceil((new Date(d) - new Date()) / 86400000); };
+
 const EmployeeDashboard = () => {
   const navigate = useNavigate();
-  const [dashboardData, setDashboardData] = useState({
+  const [data, setData] = useState({
     progress: { completed: 0, total: 0, percentage: 0, pending: 0, in_progress: 0 },
-    pendingTasks: [],
-    recentDocuments: [],
-    overdueTasks: [],
-    upcomingTasks: []
+    pendingTasks: [], recentDocuments: [], overdueTasks: [], upcomingTasks: []
   });
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, []);
+  useEffect(() => { fetchData(); }, []);
 
-  const fetchDashboardData = async (showToast = false) => {
+  const fetchData = async (showToast = false) => {
     try {
       setLoading(true);
-      
-      const [tasksResponse, documentsResponse] = await Promise.all([
-        taskApi.getMyTasks().catch(err => {
-          console.error('Tasks API error:', err);
-          return { data: [] };
-        }),
-        documentApi.getMyDocuments().catch(err => {
-          console.error('Documents API error:', err);
-          return { data: [] };
-        })
+      const [tasksRes, docsRes] = await Promise.all([
+        taskApi.getMyTasks().catch(() => ({ data: [] })),
+        documentApi.getMyDocuments().catch(() => ({ data: [] }))
       ]);
+      const tasks = Array.isArray(tasksRes.data) ? tasksRes.data : (tasksRes.data?.tasks || tasksRes.data?.data || []);
+      const docs  = Array.isArray(docsRes.data)  ? docsRes.data  : (docsRes.data?.documents || docsRes.data?.data || []);
 
-      let tasks = [];
-      if (Array.isArray(tasksResponse.data)) {
-        tasks = tasksResponse.data;
-      } else if (tasksResponse.data && Array.isArray(tasksResponse.data.tasks)) {
-        tasks = tasksResponse.data.tasks;
-      } else if (tasksResponse.data && Array.isArray(tasksResponse.data.data)) {
-        tasks = tasksResponse.data.data;
-      }
-
-      let documents = [];
-      if (Array.isArray(documentsResponse.data)) {
-        documents = documentsResponse.data;
-      } else if (documentsResponse.data && Array.isArray(documentsResponse.data.documents)) {
-        documents = documentsResponse.data.documents;
-      } else if (documentsResponse.data && Array.isArray(documentsResponse.data.data)) {
-        documents = documentsResponse.data.data;
-      }
-
-      const completed = tasks.filter(task => task.status === 'completed').length;
-      const inProgress = tasks.filter(task => task.status === 'in_progress').length;
-      const pending = tasks.filter(task => task.status === 'pending').length;
-      const total = tasks.length;
+      const completed  = tasks.filter(t => t.status === 'completed').length;
+      const inProgress = tasks.filter(t => t.status === 'in_progress').length;
+      const pending    = tasks.filter(t => t.status === 'pending').length;
+      const total      = tasks.length;
       const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
 
-      const overdueTasks = tasks.filter(task => 
-        task.status !== 'completed' && 
-        task.due_date && 
-        new Date(task.due_date) < new Date()
-      );
+      const overdueTasks   = tasks.filter(t => t.status !== 'completed' && t.due_date && new Date(t.due_date) < new Date());
+      const today = new Date(), nextWeek = new Date(today.getTime() + 7 * 86400000);
+      const upcomingTasks  = tasks.filter(t => { if (!t.due_date || t.status === 'completed') return false; const d = new Date(t.due_date); return d >= today && d <= nextWeek; }).slice(0, 6);
 
-      const upcomingTasks = tasks
-        .filter(task => {
-          if (!task.due_date || task.status === 'completed') return false;
-          const dueDate = new Date(task.due_date);
-          const today = new Date();
-          const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
-          return dueDate >= today && dueDate <= nextWeek;
-        })
-        .slice(0, 6);
-
-      setDashboardData({
-        progress: {
-          completed,
-          total,
-          percentage,
-          pending,
-          in_progress: inProgress
-        },
-        pendingTasks: tasks.filter(task => task.status !== 'completed').slice(0, 5),
-        recentDocuments: documents.slice(0, 3),
-        overdueTasks: overdueTasks.slice(0, 3),
-        upcomingTasks: upcomingTasks
+      setData({
+        progress: { completed, total, percentage, pending, in_progress: inProgress },
+        pendingTasks:    tasks.filter(t => t.status !== 'completed').slice(0, 5),
+        recentDocuments: docs.slice(0, 3),
+        overdueTasks:    overdueTasks.slice(0, 3),
+        upcomingTasks,
       });
-
-      if (showToast) {
-        toast.success('Dashboard refreshed successfully');
-      }
-    } catch (error) {
-      console.error('Error fetching dashboard data:', error);
-      toast.error('Failed to load dashboard data');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+      if (showToast) toast.success('Dashboard refreshed');
+    } catch { toast.error('Failed to load dashboard data'); }
+    finally { setLoading(false); }
   };
 
-  const handleRefresh = () => {
-    setRefreshing(true);
-    fetchDashboardData(true);
-  };
-
-  const StatCard = ({ title, value, subtitle, icon: Icon, gradient, bgColor, iconBg, delay, onClick }) => (
-    <div 
-      onClick={onClick}
-      className={`group relative ${bgColor} rounded-2xl shadow-sm hover:shadow-xl transition-all duration-500 overflow-hidden border border-white/20 ${onClick ? 'cursor-pointer' : ''}`}
-      style={{ 
-        animationDelay: `${delay}ms`,
-        animation: 'slideUp 0.6s ease-out forwards',
-        opacity: 0
-      }}
-    >
-      <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500">
-        <div className={`absolute inset-0 ${gradient} opacity-10`}></div>
-      </div>
-      
-      <div className="relative p-6">
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <p className="text-sm font-medium text-white/80 mb-1 tracking-wide uppercase">{title}</p>
-            <p className="text-3xl font-bold text-white mt-2 tracking-tight">{value}</p>
-            {subtitle && (
-              <p className="text-xs text-white/70 mt-2">{subtitle}</p>
-            )}
-          </div>
-          <div className={`p-3.5 rounded-xl ${iconBg} transform group-hover:scale-110 group-hover:rotate-3 transition-all duration-300`}>
-            <Icon className="h-6 w-6 text-white" />
-          </div>
-        </div>
-        
-        <div className="mt-4 flex items-center text-xs text-white/70">
-          <ArrowTrendingUpIcon className="h-3.5 w-3.5 mr-1 text-white/90" />
-          <span>Updated just now</span>
-        </div>
+  if (loading) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#f1f5f9', fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      <div style={{ position: 'relative', width: 48, height: 48 }}>
+        <div style={{ position: 'absolute', inset: 0, border: '4px solid #e2e8f0', borderRadius: '50%' }} />
+        <div style={{ position: 'absolute', inset: 0, border: '4px solid transparent', borderTopColor: '#6366f1', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
       </div>
     </div>
   );
 
-  const getPriorityColor = (priority) => {
-    switch (priority?.toLowerCase()) {
-      case 'high':
-        return 'bg-red-100 text-red-700 border-red-200';
-      case 'medium':
-        return 'bg-amber-100 text-amber-700 border-amber-200';
-      case 'low':
-        return 'bg-green-100 text-green-700 border-green-200';
-      default:
-        return 'bg-gray-100 text-gray-700 border-gray-200';
-    }
-  };
+  const { progress, pendingTasks, recentDocuments, overdueTasks, upcomingTasks } = data;
+  const barColor = progress.percentage >= 80 ? '#22c55e' : progress.percentage >= 50 ? '#3b82f6' : '#a855f7';
 
-  const getStatusColor = (status) => {
-    switch (status?.toLowerCase()) {
-      case 'approved':
-        return 'text-emerald-700 bg-emerald-50 border-emerald-200';
-      case 'rejected':
-        return 'text-red-700 bg-red-50 border-red-200';
-      case 'pending':
-        return 'text-amber-700 bg-amber-50 border-amber-200';
-      default:
-        return 'text-gray-700 bg-gray-50 border-gray-200';
-    }
-  };
-
-  const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric',
-      year: 'numeric'
-    });
-  };
-
-  const getDaysUntil = (dateString) => {
-    if (!dateString) return null;
-    const today = new Date();
-    const dueDate = new Date(dateString);
-    const diffTime = dueDate - today;
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays;
-  };
-
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-        <div className="relative">
-          <div className="animate-spin rounded-full h-16 w-16 border-4 border-gray-200"></div>
-          <div className="animate-spin rounded-full h-16 w-16 border-4 border-indigo-600 border-t-transparent absolute inset-0"></div>
-        </div>
-      </div>
-    );
-  }
+  const STAT_CARDS = [
+    {
+      label: 'COMPLETION RATE',
+      value: `${progress.percentage}%`,
+      sub: `${progress.completed} of ${progress.total} done`,
+      color: '#22c55e',
+      WatermarkIcon: ChartPieIcon,         
+      onClick: undefined,
+    },
+    {
+      label: 'PENDING TASKS',
+      value: progress.pending,
+      sub: 'Awaiting completion',
+      color: '#f97316',
+      WatermarkIcon: ClockIcon,             
+      onClick: () => navigate('/employee/tasks'),
+    },
+    {
+      label: 'IN PROGRESS',
+      value: progress.in_progress,
+      sub: 'Currently working on',
+      color: '#3b82f6',
+      WatermarkIcon: ArrowTrendingUpIcon,   
+      onClick: undefined,
+    },
+    {
+      label: 'DOCUMENTS',
+      value: recentDocuments.length,
+      sub: 'Files uploaded',
+      color: '#a855f7',
+      WatermarkIcon: DocumentTextIcon,      
+      onClick: () => navigate('/employee/documents'),
+    },
+  ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:bg-gray-900 dark:from-gray-900 dark:via-gray-900 dark:to-gray-900">
+    <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", minHeight: '100vh', background: '#f1f5f9', padding: '28px 28px 40px' }}>
       <style>{`
-        @keyframes slideUp {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        
-        @keyframes shimmer {
-          0% {
-            background-position: -200% center;
-          }
-          100% {
-            background-position: 200% center;
-          }
-        }
-        
-        .task-item {
-          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        
-        .task-item:hover {
-          transform: translateX(4px);
-        }
-        
-        .progress-bar {
-          background: linear-gradient(
-            90deg,
-            rgba(99, 102, 241, 0.1) 0%,
-            rgba(99, 102, 241, 0.2) 50%,
-            rgba(99, 102, 241, 0.1) 100%
-          );
-          background-size: 200% 100%;
-          animation: shimmer 2s infinite;
-        }
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+        @keyframes slideUp { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes spin    { to { transform: rotate(360deg); } }
+        .db-stat:hover     { transform: translateY(-4px); box-shadow: 0 14px 34px rgba(0,0,0,0.16) !important; }
+        .db-task-row:hover { background: #f8fafc; }
+        .db-upcoming:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,0.08); }
       `}</style>
 
-      <div className="space-y-6 p-6 max-w-[1600px] mx-auto">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <h1 className="text-4xl font-bold text-gray-900 mb-2 tracking-tight">
-              Welcome Back!
-            </h1>
-            <p className="text-gray-600 text-lg">
-              Here's your onboarding progress overview
-            </p>
+      <div style={{ maxWidth: 1400, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 22 }}>
+
+        {/* ── Hero banner ── */}
+        <div style={{ background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)', borderRadius: 22, padding: '28px 32px', position: 'relative', overflow: 'hidden', animation: 'slideUp 0.5s ease-out both' }}>
+          <div style={{ position: 'absolute', right: 32, top: '50%', transform: 'translateY(-50%)', opacity: 0.05, pointerEvents: 'none' }}>
+            <ChartBarIcon style={{ width: 160, height: 160, color: '#fff' }} />
           </div>
-          
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-4 bg-white rounded-2xl px-6 py-4 border border-indigo-100 shadow-sm">
-              <div className="flex-shrink-0">
-                <div className="relative w-20 h-20">
-                  <svg className="transform -rotate-90 w-20 h-20">
-                    <circle
-                      cx="40"
-                      cy="40"
-                      r="32"
-                      stroke="#e0e7ff"
-                      strokeWidth="6"
-                      fill="transparent"
-                    />
-                    <circle
-                      cx="40"
-                      cy="40"
-                      r="32"
-                      stroke="url(#gradient)"
-                      strokeWidth="6"
-                      fill="transparent"
-                      strokeDasharray={`${2 * Math.PI * 32}`}
-                      strokeDashoffset={`${2 * Math.PI * 32 * (1 - dashboardData.progress.percentage / 100)}`}
-                      strokeLinecap="round"
-                      className="transition-all duration-1000 ease-out"
-                    />
-                    <defs>
-                      <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stopColor="#6366f1" />
-                        <stop offset="100%" stopColor="#a855f7" />
-                      </linearGradient>
-                    </defs>
-                  </svg>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-xl font-bold text-gray-900">{dashboardData.progress.percentage}%</span>
-                  </div>
+          <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 32, flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: 180 }}>
+              <h1 style={{ fontSize: 28, fontWeight: 800, color: '#fff', margin: '0 0 6px' }}>Welcome Back!</h1>
+              <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.55)', margin: 0 }}>Here's your onboarding progress overview</p>
+            </div>
+            <div style={{ width: 1, height: 70, background: 'rgba(255,255,255,0.12)', flexShrink: 0 }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
+              <div style={{ position: 'relative', width: 80, height: 80 }}>
+                <svg style={{ transform: 'rotate(-90deg)', width: 80, height: 80 }}>
+                  <circle cx="40" cy="40" r="32" stroke="rgba(255,255,255,0.14)" strokeWidth="7" fill="transparent" />
+                  <circle cx="40" cy="40" r="32"
+                    stroke="url(#dbGrad)" strokeWidth="7" fill="transparent"
+                    strokeDasharray={`${2 * Math.PI * 32}`}
+                    strokeDashoffset={`${2 * Math.PI * 32 * (1 - progress.percentage / 100)}`}
+                    strokeLinecap="round"
+                    style={{ transition: 'stroke-dashoffset 1s ease-out' }} />
+                  <defs>
+                    <linearGradient id="dbGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#6366f1" /><stop offset="100%" stopColor="#a855f7" />
+                    </linearGradient>
+                  </defs>
+                </svg>
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <span style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>{progress.percentage}%</span>
                 </div>
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-600 mb-1">Overall Progress</p>
-                <p className="text-2xl font-bold text-gray-900">{dashboardData.progress.completed}/{dashboardData.progress.total}</p>
-                <p className="text-xs text-gray-500 mt-1">tasks completed</p>
+                <p style={{ fontSize: 10.5, fontWeight: 700, color: 'rgba(255,255,255,0.45)', margin: '0 0 5px', letterSpacing: '0.07em', textTransform: 'uppercase' }}>Overall Progress</p>
+                <p style={{ fontSize: 20, fontWeight: 800, color: '#fff', margin: '0 0 2px', lineHeight: 1 }}>
+                  {progress.completed}<span style={{ fontSize: 13, opacity: 0.55 }}>/{progress.total}</span>
+                </p>
+                <p style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.38)', margin: 0 }}>tasks completed</p>
               </div>
+            </div>
+            <div style={{ width: 1, height: 70, background: 'rgba(255,255,255,0.12)', flexShrink: 0 }} />
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ fontSize: 12.5, fontWeight: 700, color: 'rgba(255,255,255,0.65)' }}>Completion</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 700, color: barColor }}>
+                  <ArrowTrendingUpIcon style={{ width: 12, height: 12 }} />
+                  {progress.percentage >= 80 ? 'Excellent!' : progress.percentage >= 50 ? 'Good progress!' : 'Keep going!'}
+                </span>
+              </div>
+              <div style={{ width: '100%', background: 'rgba(255,255,255,0.12)', borderRadius: 99, height: 8, overflow: 'hidden', marginBottom: 10 }}>
+                <div style={{ height: '100%', width: `${progress.percentage}%`, background: barColor, borderRadius: 99, transition: 'width 1s ease-out', boxShadow: `0 0 10px ${barColor}88` }} />
+              </div>
+             
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-          <StatCard
-            title="Completion Rate"
-            value={`${dashboardData.progress.percentage}%`}
-            subtitle={`${dashboardData.progress.completed} of ${dashboardData.progress.total} completed`}
-            icon={ChartBarIcon}
-            gradient="bg-gradient-to-br from-emerald-400 to-teal-500"
-            bgColor="bg-gradient-to-br from-emerald-500 to-teal-600"
-            iconBg="bg-white/20 backdrop-blur-sm"
-            delay={0}
-          />
-          <StatCard
-            title="Pending Tasks"
-            value={dashboardData.progress.pending}
-            subtitle="Awaiting completion"
-            icon={ClockIcon}
-            gradient="bg-gradient-to-br from-amber-400 to-orange-500"
-            bgColor="bg-gradient-to-br from-amber-500 to-orange-600"
-            iconBg="bg-white/20 backdrop-blur-sm"
-            delay={100}
-            onClick={() => navigate('/employee/tasks')}
-          />
-          <StatCard
-            title="In Progress"
-            value={dashboardData.progress.in_progress}
-            subtitle="Currently working on"
-            icon={CheckCircleIcon}
-            gradient="bg-gradient-to-br from-blue-400 to-indigo-500"
-            bgColor="bg-gradient-to-br from-blue-500 to-indigo-600"
-            iconBg="bg-white/20 backdrop-blur-sm"
-            delay={200}
-          />
-          <StatCard
-            title="Documents"
-            value={dashboardData.recentDocuments.length}
-            subtitle="Files uploaded"
-            icon={DocumentTextIcon}
-            gradient="bg-gradient-to-br from-purple-400 to-pink-500"
-            bgColor="bg-gradient-to-br from-purple-500 to-pink-600"
-            iconBg="bg-white/20 backdrop-blur-sm"
-            delay={300}
-            onClick={() => navigate('/employee/documents')}
-          />
+        {/* ── 4 stat cards with watermark icons ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
+          {STAT_CARDS.map((card, i) => (
+            <div key={card.label} className="db-stat" onClick={card.onClick}
+              style={{
+                background: card.color,
+                borderRadius: 20,
+                padding: '20px 18px',
+                color: '#fff',
+                boxShadow: `0 4px 18px ${card.color}55`,
+                cursor: card.onClick ? 'pointer' : 'default',
+                animation: `slideUp 0.5s ease-out ${i * 60}ms both`,
+                transition: 'transform 0.2s, box-shadow 0.2s',
+                position: 'relative',
+                overflow: 'hidden',
+              }}>
+              {/* Watermark icon — bottom-right ghost */}
+              <div style={{ position: 'absolute', right: -14, bottom: -14, opacity: 0.13, pointerEvents: 'none' }}>
+                <card.WatermarkIcon style={{ width: 96, height: 96, color: '#fff' }} />
+              </div>
+              {/* Content */}
+              <div style={{ position: 'relative', zIndex: 1 }}>
+                <p style={{ fontSize: 10.5, fontWeight: 700, opacity: 0.88, letterSpacing: '0.07em', margin: '0 0 8px', textAlign: 'center' }}>{card.label}</p>
+                <p style={{ fontSize: 40, fontWeight: 800, lineHeight: 1, textAlign: 'center', margin: '0 0 5px' }}>{card.value}</p>
+                <p style={{ fontSize: 11, opacity: 0.75, textAlign: 'center', margin: 0 }}>{card.sub}</p>
+              </div>
+            </div>
+          ))}
         </div>
 
-        {dashboardData.overdueTasks.length > 0 && (
-          <div 
-            className="bg-gradient-to-r from-red-50 to-rose-50 border-l-4 border-red-500 rounded-2xl p-6 shadow-sm"
-            style={{
-              animation: 'slideUp 0.6s ease-out forwards',
-              animationDelay: '400ms',
-              opacity: 0
-            }}
-          >
-            <div className="flex items-start gap-4">
-              <div className="flex-shrink-0">
-                <div className="p-2 bg-red-100 rounded-xl">
-                  <ExclamationCircleIcon className="h-6 w-6 text-red-600" />
-                </div>
-              </div>
-              <div className="flex-1">
-                <h3 className="text-lg font-bold text-red-900 mb-2">
-                  {dashboardData.overdueTasks.length} Overdue {dashboardData.overdueTasks.length === 1 ? 'Task' : 'Tasks'} Require Attention
-                </h3>
-                <div className="space-y-2">
-                  {dashboardData.overdueTasks.map((task) => (
-                    <div key={task.id} className="flex items-center gap-3 text-sm">
-                      <div className="w-1.5 h-1.5 rounded-full bg-red-500"></div>
-                      <span className="font-medium text-red-800">{task.title}</span>
-                      <span className="text-red-600">
-                        • Due {formatDate(task.due_date)}
-                      </span>
-                      {task.priority && (
-                        <span className={`px-2 py-0.5 text-xs font-medium rounded border ${getPriorityColor(task.priority)}`}>
-                          {task.priority}
-                        </span>
-                      )}
+        {/* ── Overdue alert ── */}
+        {overdueTasks.length > 0 && (
+          <div style={{ background: '#fff', borderRadius: 16, border: '1.5px solid #fecaca', borderLeft: '5px solid #ef4444', padding: '18px 22px', display: 'flex', gap: 14, alignItems: 'flex-start', animation: 'slideUp 0.5s ease-out 240ms both' }}>
+            <div style={{ width: 36, height: 36, borderRadius: 11, background: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <ExclamationCircleIcon style={{ width: 18, height: 18, color: '#ef4444' }} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 800, color: '#991b1b', margin: '0 0 8px' }}>
+                {overdueTasks.length} Overdue {overdueTasks.length === 1 ? 'Task' : 'Tasks'} Require Attention
+              </h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                {overdueTasks.map(task => {
+                  const ps = getPriorityStyle(task.priority);
+                  return (
+                    <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#ef4444', flexShrink: 0 }} />
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#991b1b' }}>{task.title}</span>
+                      <span style={{ fontSize: 12, color: '#dc2626' }}>· Due {formatDate(task.due_date)}</span>
+                      {task.priority && <span style={{ fontSize: 10.5, fontWeight: 700, padding: '1px 7px', borderRadius: 6, background: ps.bg, color: ps.color }}>{task.priority}</span>}
                     </div>
-                  ))}
-                </div>
-                <button
-                  onClick={() => navigate('/employee/tasks')}
-                  className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium flex items-center gap-2"
-                >
-                  View All Tasks
-                  <ArrowRightIcon className="h-4 w-4" />
-                </button>
+                  );
+                })}
               </div>
+              <button onClick={() => navigate('/employee/tasks')}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 12, padding: '7px 16px', background: '#ef4444', border: 'none', color: '#fff', borderRadius: 9, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                View All Tasks <ArrowRightIcon style={{ width: 13, height: 13 }} />
+              </button>
             </div>
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="px-6 py-5 border-b border-gray-100 bg-gradient-to-r from-amber-50 to-orange-50">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                  <ClockIcon className="h-5 w-5 text-amber-600" />
-                  Pending Tasks
-                </h2>
-                <span className="px-3 py-1 text-xs font-semibold text-amber-700 bg-amber-100 rounded-full">
-                  {dashboardData.pendingTasks.length} Active
-                </span>
-              </div>
+        {/* ── Pending Tasks + Recent Documents ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, animation: 'slideUp 0.5s ease-out 300ms both' }}>
+
+          {/* Pending Tasks */}
+          <div style={{ background: '#fff', borderRadius: 20, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+            <div style={{ padding: '16px 22px', background: 'linear-gradient(135deg, #fefce8, #fff7ed)', borderBottom: '1px solid #fef9c3', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <h2 style={{ fontSize: 14.5, fontWeight: 800, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <ClockIcon style={{ width: 17, height: 17, color: '#f97316' }} /> Pending Tasks
+              </h2>
+              <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 8, background: '#fef9c3', color: '#a16207' }}>{pendingTasks.length} Active</span>
             </div>
-            
-            <div className="divide-y divide-gray-100 max-h-96 overflow-y-auto">
-              {dashboardData.pendingTasks.map((task, index) => {
-                const daysUntil = getDaysUntil(task.due_date);
+            <div style={{ maxHeight: 340, overflowY: 'auto' }}>
+              {pendingTasks.length === 0 ? (
+                <div style={{ padding: '48px 24px', textAlign: 'center' }}>
+                  <SparklesIcon style={{ width: 36, height: 36, color: '#fbbf24', margin: '0 auto 10px' }} />
+                  <p style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: '0 0 3px' }}>All caught up!</p>
+                  <p style={{ fontSize: 12.5, color: '#94a3b8', margin: 0 }}>No pending tasks</p>
+                </div>
+              ) : pendingTasks.map((task, i) => {
+                const days = getDaysUntil(task.due_date);
+                const ps   = getPriorityStyle(task.priority);
                 return (
-                  <div 
-                    key={task.id} 
-                    className="task-item px-6 py-4 hover:bg-gradient-to-r hover:from-amber-50/50 hover:to-orange-50/50 cursor-pointer"
-                    onClick={() => navigate('/employee/tasks')}
-                    style={{
-                      animationDelay: `${500 + index * 50}ms`,
-                      animation: 'slideUp 0.5s ease-out forwards',
-                      opacity: 0
-                    }}
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-2">
-                          <div className="w-2 h-2 rounded-full bg-amber-500"></div>
-                          <h3 className="text-sm font-semibold text-gray-900 truncate">{task.title}</h3>
-                          {task.priority && (
-                            <span className={`px-2 py-0.5 text-xs font-medium rounded border ${getPriorityColor(task.priority)}`}>
-                              {task.priority}
-                            </span>
-                          )}
+                  <div key={task.id} className="db-task-row" onClick={() => navigate('/employee/tasks')}
+                    style={{ padding: '13px 22px', borderBottom: i < pendingTasks.length - 1 ? '1px solid #f1f5f9' : 'none', cursor: 'pointer', transition: 'background 0.15s' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, justifyContent: 'space-between' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 4 }}>
+                          <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#f97316', flexShrink: 0 }} />
+                          <span style={{ fontSize: 13.5, fontWeight: 700, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</span>
+                          {task.priority && <span style={{ fontSize: 10.5, fontWeight: 700, padding: '1px 7px', borderRadius: 6, background: ps.bg, color: ps.color, flexShrink: 0 }}>{task.priority}</span>}
                         </div>
-                        {task.description && (
-                          <p className="text-sm text-gray-600 line-clamp-2 mb-2">{task.description}</p>
+                        {task.due_date && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11.5, color: '#94a3b8' }}>
+                            <CalendarIcon style={{ width: 11, height: 11 }} /> Due: {formatDate(task.due_date)}
+                            {days !== null && <span style={{ color: days < 0 ? '#ef4444' : days <= 3 ? '#f97316' : '#22c55e', fontWeight: 700 }}>
+                              ({days < 0 ? `${Math.abs(days)}d overdue` : days === 0 ? 'Today' : `${days}d left`})
+                            </span>}
+                          </div>
                         )}
-                        <div className="flex items-center gap-4 text-xs text-gray-500">
-                          {task.due_date && (
-                            <span className="flex items-center gap-1">
-                              <CalendarIcon className="h-3 w-3" />
-                              Due: {formatDate(task.due_date)}
-                              {daysUntil !== null && (
-                                <span className={`ml-1 ${daysUntil < 0 ? 'text-red-600' : daysUntil <= 3 ? 'text-amber-600' : 'text-green-600'}`}>
-                                  ({daysUntil < 0 ? `${Math.abs(daysUntil)} days overdue` : daysUntil === 0 ? 'Today' : `${daysUntil} days left`})
-                                </span>
-                              )}
-                            </span>
-                          )}
-                        </div>
                       </div>
-                      <span className={`flex-shrink-0 px-3 py-1 text-xs font-medium rounded-lg border ${
-                        task.status === 'in_progress' 
-                          ? 'text-blue-700 bg-blue-50 border-blue-200'
-                          : 'text-amber-700 bg-amber-50 border-amber-200'
-                      }`}>
+                      <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 7, flexShrink: 0, background: task.status === 'in_progress' ? '#dbeafe' : '#fef9c3', color: task.status === 'in_progress' ? '#1d4ed8' : '#a16207' }}>
                         {task.status === 'in_progress' ? 'In Progress' : 'Pending'}
                       </span>
                     </div>
                   </div>
                 );
               })}
-              
-              {dashboardData.pendingTasks.length === 0 && (
-                <div className="px-6 py-12 text-center">
-                  <SparklesIcon className="h-12 w-12 text-amber-300 mx-auto mb-3" />
-                  <p className="text-gray-700 font-medium">All caught up!</p>
-                  <p className="text-sm text-gray-500 mt-1">No pending tasks at the moment</p>
-                </div>
-              )}
             </div>
-            
-            {dashboardData.pendingTasks.length > 0 && (
-              <div className="px-6 py-4 border-t border-gray-100 bg-gray-50">
-                <button
-                  onClick={() => navigate('/employee/tasks')}
-                  className="w-full text-center text-sm font-medium text-indigo-600 hover:text-indigo-700 flex items-center justify-center gap-2"
-                >
-                  View All Tasks
-                  <ArrowRightIcon className="h-4 w-4" />
+            {pendingTasks.length > 0 && (
+              <div style={{ padding: '11px 22px', borderTop: '1px solid #f1f5f9', background: '#fafafa' }}>
+                <button onClick={() => navigate('/employee/tasks')}
+                  style={{ display: 'flex', alignItems: 'center', gap: 5, margin: '0 auto', fontSize: 12.5, fontWeight: 700, color: '#6366f1', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
+                  View All Tasks <ArrowRightIcon style={{ width: 13, height: 13 }} />
                 </button>
               </div>
             )}
           </div>
 
-          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="px-6 py-5 border-b border-gray-100 bg-gradient-to-r from-purple-50 to-pink-50">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                  <DocumentTextIcon className="h-5 w-5 text-purple-600" />
-                  Recent Documents
-                </h2>
-                <span className="px-3 py-1 text-xs font-semibold text-purple-700 bg-purple-100 rounded-full">
-                  {dashboardData.recentDocuments.length} Files
-                </span>
-              </div>
+          {/* Recent Documents */}
+          <div style={{ background: '#fff', borderRadius: 20, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+            <div style={{ padding: '16px 22px', background: 'linear-gradient(135deg, #fdf4ff, #faf5ff)', borderBottom: '1px solid #f3e8ff', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <h2 style={{ fontSize: 14.5, fontWeight: 800, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <DocumentTextIcon style={{ width: 17, height: 17, color: '#a855f7' }} /> Recent Documents
+              </h2>
+              <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 8, background: '#f3e8ff', color: '#7e22ce' }}>{recentDocuments.length} Files</span>
             </div>
-            
-            <div className="divide-y divide-gray-100 max-h-96 overflow-y-auto">
-              {dashboardData.recentDocuments.map((doc, index) => (
-                <div 
-                  key={doc.id} 
-                  className="task-item px-6 py-4 hover:bg-gradient-to-r hover:from-purple-50/50 hover:to-pink-50/50 cursor-pointer"
-                  onClick={() => navigate('/employee/documents')}
-                  style={{
-                    animationDelay: `${500 + index * 50}ms`,
-                    animation: 'slideUp 0.5s ease-out forwards',
-                    opacity: 0
-                  }}
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <DocumentTextIcon className="h-4 w-4 text-purple-500 flex-shrink-0" />
-                        <h3 className="text-sm font-semibold text-gray-900 truncate">{doc.filename}</h3>
-                      </div>
-                      <div className="flex items-center gap-3 text-xs text-gray-500">
-                        <span>Uploaded {formatDate(doc.uploadedDate || doc.created_at)}</span>
-                        {doc.file_size && (
-                          <span>• {(doc.file_size / 1024 / 1024).toFixed(2)} MB</span>
-                        )}
-                      </div>
-                    </div>
-                    <span className={`flex-shrink-0 px-3 py-1 text-xs font-medium rounded-lg border ${getStatusColor(doc.status)}`}>
-                      {doc.status ? doc.status.charAt(0).toUpperCase() + doc.status.slice(1) : 'Pending'}
-                    </span>
-                  </div>
-                </div>
-              ))}
-              
-              {dashboardData.recentDocuments.length === 0 && (
-                <div className="px-6 py-12 text-center">
-                  <DocumentTextIcon className="h-12 w-12 text-purple-300 mx-auto mb-3" />
-                  <p className="text-gray-700 font-medium">No documents yet</p>
-                  <p className="text-sm text-gray-500 mt-1">Upload your first document to get started</p>
-                  <button
-                    onClick={() => navigate('/employee/documents')}
-                    className="mt-4 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium"
-                  >
+            <div style={{ maxHeight: 340, overflowY: 'auto' }}>
+              {recentDocuments.length === 0 ? (
+                <div style={{ padding: '48px 24px', textAlign: 'center' }}>
+                  <DocumentTextIcon style={{ width: 36, height: 36, color: '#d8b4fe', margin: '0 auto 10px' }} />
+                  <p style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', margin: '0 0 3px' }}>No documents yet</p>
+                  <p style={{ fontSize: 12.5, color: '#94a3b8', margin: '0 0 14px' }}>Upload your first document</p>
+                  <button onClick={() => navigate('/employee/documents')}
+                    style={{ padding: '8px 18px', background: '#a855f7', border: 'none', color: '#fff', borderRadius: 9, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
                     Upload Document
                   </button>
                 </div>
-              )}
+              ) : recentDocuments.map((doc, i) => {
+                const ss = getStatusStyle(doc.status);
+                return (
+                  <div key={doc.id} className="db-task-row" onClick={() => navigate('/employee/documents')}
+                    style={{ padding: '13px 22px', borderBottom: i < recentDocuments.length - 1 ? '1px solid #f1f5f9' : 'none', cursor: 'pointer', transition: 'background 0.15s', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+                      <div style={{ width: 32, height: 32, borderRadius: 9, background: '#fdf4ff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <DocumentTextIcon style={{ width: 14, height: 14, color: '#a855f7' }} />
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <p style={{ fontSize: 13.5, fontWeight: 700, color: '#0f172a', margin: '0 0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.filename}</p>
+                        <p style={{ fontSize: 11.5, color: '#94a3b8', margin: 0 }}>Uploaded {formatDate(doc.uploadedDate || doc.created_at)}</p>
+                      </div>
+                    </div>
+                    <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 7, background: ss.bg, color: ss.color, flexShrink: 0 }}>
+                      {doc.status ? doc.status.charAt(0).toUpperCase() + doc.status.slice(1) : 'Pending'}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
-            
-            {dashboardData.recentDocuments.length > 0 && (
-              <div className="px-6 py-4 border-t border-gray-100 bg-gray-50">
-                <button
-                  onClick={() => navigate('/employee/documents')}
-                  className="w-full text-center text-sm font-medium text-indigo-600 hover:text-indigo-700 flex items-center justify-center gap-2"
-                >
-                  View All Documents
-                  <ArrowRightIcon className="h-4 w-4" />
+            {recentDocuments.length > 0 && (
+              <div style={{ padding: '11px 22px', borderTop: '1px solid #f1f5f9', background: '#fafafa' }}>
+                <button onClick={() => navigate('/employee/documents')}
+                  style={{ display: 'flex', alignItems: 'center', gap: 5, margin: '0 auto', fontSize: 12.5, fontWeight: 700, color: '#6366f1', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
+                  View All Documents <ArrowRightIcon style={{ width: 13, height: 13 }} />
                 </button>
               </div>
             )}
           </div>
         </div>
 
-        {dashboardData.upcomingTasks.length > 0 && (
-          <div 
-            className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm border border-gray-100 overflow-hidden"
-            style={{
-              animation: 'slideUp 0.6s ease-out forwards',
-              animationDelay: '700ms',
-              opacity: 0
-            }}
-          >
-            <div className="px-6 py-5 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-indigo-50">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                  <BellIcon className="h-5 w-5 text-blue-600" />
-                  Upcoming Tasks (Next 7 Days)
-                </h2>
-                <span className="px-3 py-1 text-xs font-semibold text-blue-700 bg-blue-100 rounded-full">
-                  {dashboardData.upcomingTasks.length}
-                </span>
-              </div>
+        {/* ── Upcoming tasks grid ── */}
+        {upcomingTasks.length > 0 && (
+          <div style={{ background: '#fff', borderRadius: 20, border: '1px solid #e2e8f0', overflow: 'hidden', animation: 'slideUp 0.5s ease-out 360ms both' }}>
+            <div style={{ padding: '16px 22px', background: 'linear-gradient(135deg, #eff6ff, #eef2ff)', borderBottom: '1px solid #dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <h2 style={{ fontSize: 14.5, fontWeight: 800, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <BellIcon style={{ width: 17, height: 17, color: '#3b82f6' }} /> Upcoming Tasks
+                <span style={{ fontSize: 12, fontWeight: 600, color: '#64748b' }}>(Next 7 Days)</span>
+              </h2>
+              <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 8, background: '#dbeafe', color: '#1d4ed8' }}>{upcomingTasks.length}</span>
             </div>
-            
-            <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {dashboardData.upcomingTasks.map((task) => {
-                  const daysUntil = getDaysUntil(task.due_date);
-                  return (
-                    <div 
-                      key={task.id}
-                      className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-100 hover:shadow-md transition-all cursor-pointer"
-                      onClick={() => navigate('/employee/tasks')}
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <h3 className="text-sm font-semibold text-gray-900 line-clamp-2">{task.title}</h3>
-                        {task.priority && (
-                          <span className={`flex-shrink-0 ml-2 px-2 py-0.5 text-xs font-medium rounded border ${getPriorityColor(task.priority)}`}>
-                            {task.priority}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-gray-600">
-                        <CalendarIcon className="h-3 w-3" />
-                        <span>{formatDate(task.due_date)}</span>
-                        {daysUntil !== null && daysUntil >= 0 && (
-                          <span className={`ml-1 font-medium ${daysUntil <= 1 ? 'text-red-600' : daysUntil <= 3 ? 'text-amber-600' : 'text-blue-600'}`}>
-                            ({daysUntil === 0 ? 'Today' : daysUntil === 1 ? 'Tomorrow' : `in ${daysUntil} days`})
-                          </span>
-                        )}
-                      </div>
+            <div style={{ padding: 18, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
+              {upcomingTasks.map(task => {
+                const days = getDaysUntil(task.due_date);
+                const ps   = getPriorityStyle(task.priority);
+                return (
+                  <div key={task.id} className="db-upcoming" onClick={() => navigate('/employee/tasks')}
+                    style={{ padding: 14, background: 'linear-gradient(135deg, #eff6ff, #eef2ff)', borderRadius: 14, border: '1px solid #bfdbfe', cursor: 'pointer', transition: 'transform 0.2s, box-shadow 0.2s' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8, gap: 8 }}>
+                      <h3 style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', margin: 0, flex: 1 }}>{task.title}</h3>
+                      {task.priority && <span style={{ fontSize: 10.5, fontWeight: 700, padding: '1px 7px', borderRadius: 6, background: ps.bg, color: ps.color, flexShrink: 0 }}>{task.priority}</span>}
                     </div>
-                  );
-                })}
-              </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#64748b' }}>
+                      <CalendarIcon style={{ width: 11, height: 11 }} /> {formatDate(task.due_date)}
+                      {days !== null && days >= 0 && (
+                        <span style={{ fontWeight: 700, color: days <= 1 ? '#ef4444' : days <= 3 ? '#f97316' : '#3b82f6' }}>
+                          ({days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : `in ${days}d`})
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

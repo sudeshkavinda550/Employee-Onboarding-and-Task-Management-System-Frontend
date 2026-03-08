@@ -221,14 +221,14 @@ export async function executeTool(name, args) {
     if (name === 'get_all_employees') {
       const res       = await agentGetAllEmployees();
       const employees = res.data?.data || res.data;
-      // Also populate cache so resolveToUUID doesn't need a separate fetch
+      // Populate cache so resolveToUUID doesn't need a separate fetch
       _employeeCache     = employees;
       _employeeCacheTime = Date.now();
       if (!employees?.length) return 'No employees found.';
-      // TRIMMED output: removed redundant fields to save tokens
+      // Include employee_id (EMP code) so the LLM can show it to HR users
       return employees
         .map(e =>
-          `${e.name} | ${e.position || 'N/A'} | ${e.department_name || 'N/A'} | ${e.onboarding_status} | ID: ${e.id}`
+          `${e.name} | EMP: ${e.employee_id || 'N/A'} | ${e.position || 'N/A'} | ${e.department_name || 'N/A'} | ${e.onboarding_status}`
         )
         .join('\n');
     }

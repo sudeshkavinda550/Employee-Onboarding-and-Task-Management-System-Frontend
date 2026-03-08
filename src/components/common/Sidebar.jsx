@@ -16,7 +16,8 @@ import {
   ExclamationTriangleIcon,
   FolderIcon,        
   ClipboardIcon,    
-  ShieldCheckIcon,   
+  ShieldCheckIcon,
+  ListBulletIcon,
 } from '@heroicons/react/24/outline';
 
 const Sidebar = () => {
@@ -39,53 +40,51 @@ const Sidebar = () => {
   };
 
   const confirmLogout = () => setShowLogoutConfirm(true);
-  const cancelLogout = () => setShowLogoutConfirm(false);
+  const cancelLogout  = () => setShowLogoutConfirm(false);
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
-  const closeSidebar = () => {
-    setIsSidebarOpen(false);
-    setIsHamburgerVisible(false);
-  };
+  const closeSidebar  = () => { setIsSidebarOpen(false); setIsHamburgerVisible(false); };
 
   const employeeNav = [
     { name: 'Dashboard', href: '/employee/dashboard', icon: HomeIcon },
-    { name: 'My Tasks', href: '/employee/tasks', icon: DocumentTextIcon },
+    { name: 'My Tasks',  href: '/employee/tasks',     icon: DocumentTextIcon },
     { name: 'Documents', href: '/employee/documents', icon: DocumentIcon },
-    { name: 'Handbook', href: '/employee/handbook', icon: DocumentTextIcon },
-    { name: 'Profile', href: '/employee/profile', icon: UserIcon },
+    { name: 'Handbook',  href: '/employee/handbook',  icon: DocumentTextIcon },
+    { name: 'Profile',   href: '/employee/profile',   icon: UserIcon },
   ];
 
   const hrNav = [
-    { name: 'Dashboard', href: '/hr/dashboard', icon: HomeIcon },
-    { name: 'Templates', href: '/hr/templates', icon: DocumentTextIcon },
-    { name: 'Employees', href: '/hr/employees', icon: UserGroupIcon },
-    { name: 'Analytics', href: '/hr/analytics', icon: ChartBarIcon },
-    { name: 'Documents', href: '/hr/documents', icon: DocumentTextIcon },
-    { name: 'AI Assistant', href: '/hr/ai-assistant', icon: DocumentTextIcon },
+    { name: 'Dashboard',     href: '/hr/dashboard',      icon: HomeIcon,         end: true },
+    { name: 'Templates',     href: '/hr/templates',      icon: DocumentTextIcon, end: true },
+    { name: 'Employees',     href: '/hr/employees',      icon: UserGroupIcon,    end: true },
+    { name: 'Employee List', href: '/hr/employees/list', icon: ListBulletIcon,   end: true },
+    { name: 'Analytics',     href: '/hr/analytics',      icon: ChartBarIcon,     end: true },
+    { name: 'Documents',     href: '/hr/documents',      icon: DocumentTextIcon, end: true },
+    { name: 'AI Assistant',  href: '/hr/ai-assistant',   icon: DocumentTextIcon, end: true },
   ];
 
   const adminNav = [
-    { name: 'Dashboard',       href: '/admin/dashboard', icon: HomeIcon },
-    { name: 'HR Management',   href: '/admin/hr',        icon: ShieldCheckIcon },
-    { name: 'Employees',       href: '/admin/employees', icon: UserGroupIcon },
-    { name: 'Templates',       href: '/admin/templates', icon: DocumentTextIcon },
-    { name: 'Documents',       href: '/admin/documents', icon: FolderIcon },
-    { name: 'Audit Log',       href: '/admin/analytics', icon: ClipboardIcon },
-    { name: 'System Settings', href: '/admin/settings',  icon: CogIcon },
+    { name: 'Dashboard',       href: '/admin/dashboard', icon: HomeIcon,         exact: true },
+    { name: 'HR Management',   href: '/admin/hr',        icon: ShieldCheckIcon,  exact: true },
+    { name: 'Employees',       href: '/admin/employees', icon: UserGroupIcon,    exact: true },
+    { name: 'Templates',       href: '/admin/templates', icon: DocumentTextIcon, exact: true },
+    { name: 'Documents',       href: '/admin/documents', icon: FolderIcon,       exact: true },
+    { name: 'Audit Log',       href: '/admin/analytics', icon: ClipboardIcon,    exact: true },
+    { name: 'System Settings', href: '/admin/settings',  icon: CogIcon,          exact: true },
   ];
 
   const getNavigation = () => {
     switch (user?.role) {
       case 'admin': return adminNav;
-      case 'hr': return hrNav;
-      default: return employeeNav;
+      case 'hr':    return hrNav;
+      default:      return employeeNav;
     }
   };
 
   const getRoleLabel = () => {
     switch (user?.role) {
       case 'admin': return 'Administrator';
-      case 'hr': return 'HR Manager';
-      default: return 'Employee';
+      case 'hr':    return 'HR Manager';
+      default:      return 'Employee';
     }
   };
 
@@ -195,8 +194,25 @@ const Sidebar = () => {
           color: #f87171;
           background: rgba(248,113,113,0.08);
         }
+
+        .nav-section-label {
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.10em;
+          text-transform: uppercase;
+          color: rgba(255,255,255,0.22);
+          padding: 0 14px;
+          margin: 10px 0 4px;
+        }
+
+        .nav-divider {
+          height: 1px;
+          background: rgba(255,255,255,0.06);
+          margin: 6px 14px;
+        }
       `}</style>
 
+      {/* Hamburger Trigger */}
       <div
         className="hamburger-trigger"
         onMouseEnter={() => setIsHamburgerVisible(true)}
@@ -215,6 +231,7 @@ const Sidebar = () => {
         </button>
       </div>
 
+      {/* Backdrop */}
       {isSidebarOpen && (
         <div
           className="fixed inset-0 z-30 backdrop-blur-sm"
@@ -223,9 +240,10 @@ const Sidebar = () => {
         />
       )}
 
+      {/* Logout Confirm Modal */}
       {showLogoutConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.55)' }}>
-          <div className="rounded-2xl p-6 mx-4 max-w-sm w-full shadow-2xl" style={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.08)' }}>
+          <div className="rounded-2xl p-6 mx-4 max-w-sm w-full shadow-2xl" style={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.08)', fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
             <div className="flex items-center gap-3 mb-3">
               <div className="p-2 rounded-xl" style={{ background: 'rgba(248,113,113,0.15)' }}>
                 <ExclamationTriangleIcon className="h-5 w-5 text-red-400" />
@@ -255,10 +273,12 @@ const Sidebar = () => {
         </div>
       )}
 
+      {/* Sidebar Panel */}
       <div
         className={`gis-sidebar fixed inset-y-0 left-0 z-40 w-64 transform transition-transform duration-300 ease-in-out flex flex-col ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
         style={{ background: '#0f172a' }}
       >
+        {/* Logo */}
         <div className="flex-shrink-0 px-5 pt-6 pb-5 mt-12">
           <div className="flex items-center gap-3">
             <div className="relative flex-shrink-0">
@@ -274,6 +294,7 @@ const Sidebar = () => {
           </div>
         </div>
 
+        {/* User Card */}
         <div className="mx-4 mb-5 p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold text-sm flex-shrink-0" style={{ background: '#2563eb' }}>
@@ -283,35 +304,42 @@ const Sidebar = () => {
               <p className="text-sm font-semibold text-white truncate">{user?.name || 'User'}</p>
               <p className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>{getRoleLabel()}</p>
             </div>
+            <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e', flexShrink: 0, boxShadow: '0 0 0 2px rgba(34,197,94,0.25)' }} />
           </div>
         </div>
 
+        {/* Navigation */}
         <div className="flex-1 overflow-y-auto px-3">
-          <p className="text-xs font-semibold uppercase tracking-widest mb-2 px-2" style={{ color: 'rgba(255,255,255,0.25)' }}>
-            Navigation
-          </p>
-          <nav className="space-y-0.5">
-            {navigation.map((item) => (
-              <NavLink
-                key={item.name}
-                to={item.href}
-                onClick={closeSidebar}
-                className={({ isActive }) => `sidebar-nav-item ${isActive ? 'active' : ''}`}
-              >
-                {({ isActive }) => (
-                  <>
-                    <div className="flex items-center gap-3">
-                      <item.icon className="h-4.5 w-4.5 flex-shrink-0" style={{ width: '18px', height: '18px' }} />
-                      <span>{item.name}</span>
-                    </div>
-                    <ChevronRightIcon className="chevron" style={{ width: '14px', height: '14px' }} />
-                  </>
-                )}
-              </NavLink>
-            ))}
+          <p className="nav-section-label">Navigation</p>
+          <nav>
+            {navigation.map((item) => {
+              const showDivider = user?.role === 'hr' && item.name === 'Analytics';
+              return (
+                <React.Fragment key={item.name}>
+                  {showDivider && <div className="nav-divider" />}
+                  <NavLink
+                    to={item.href}
+                    end={item.end}
+                    onClick={closeSidebar}
+                    className={({ isActive }) => `sidebar-nav-item ${isActive ? 'active' : ''}`}
+                  >
+                    {({ isActive }) => (
+                      <>
+                        <div className="flex items-center gap-3">
+                          <item.icon style={{ width: '18px', height: '18px', flexShrink: 0 }} />
+                          <span>{item.name}</span>
+                        </div>
+                        <ChevronRightIcon className="chevron" style={{ width: '14px', height: '14px' }} />
+                      </>
+                    )}
+                  </NavLink>
+                </React.Fragment>
+              );
+            })}
           </nav>
         </div>
 
+        {/* Logout */}
         <div className="flex-shrink-0 p-3 mx-1 mb-2" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
           <button onClick={confirmLogout} className="logout-btn">
             <ArrowRightOnRectangleIcon style={{ width: '18px', height: '18px' }} />

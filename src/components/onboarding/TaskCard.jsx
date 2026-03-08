@@ -1,261 +1,165 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  CheckCircleIcon, 
-  ClockIcon, 
-  DocumentTextIcon,
-  UserCircleIcon,
-  AcademicCapIcon,
-  VideoCameraIcon,
-  WrenchScrewdriverIcon,
-  CalendarIcon,
-  ExclamationTriangleIcon,
-  ArrowRightIcon,
-  PlayIcon
+import {
+  CheckCircleIcon, ClockIcon, DocumentTextIcon, UserCircleIcon,
+  AcademicCapIcon, VideoCameraIcon, WrenchScrewdriverIcon, CalendarIcon,
+  ExclamationTriangleIcon, ArrowRightIcon, PlayIcon, BookOpenIcon,
 } from '@heroicons/react/24/outline';
+
+const ICON_MAP = {
+  documentation: DocumentTextIcon, training: AcademicCapIcon, setup: WrenchScrewdriverIcon,
+  meeting: CalendarIcon, profile: UserCircleIcon, video: VideoCameraIcon,
+  general: DocumentTextIcon, handbook: BookOpenIcon, read_handbook: BookOpenIcon,
+};
+
+const ROUTE_MAP = {
+  documentation: '/employee/documents',  profile:       '/employee/profile',
+  training:      '/employee/training',   video:         '/employee/training/video',
+  setup:         '/employee/setup',      meeting:       '/employee/meetings',
+  handbook:      '/employee/handbook',   read_handbook: '/employee/handbook',
+};
+
+const PRIORITY_STYLE = {
+  critical: { bg: '#fee2e2', color: '#dc2626' }, high: { bg: '#ffedd5', color: '#c2410c' },
+  medium:   { bg: '#fef9c3', color: '#a16207' }, low:  { bg: '#f1f5f9', color: '#475569' },
+};
+
+const STATUS_STYLE = {
+  pending:     { bg: '#fef9c3', color: '#a16207' },
+  in_progress: { bg: '#dbeafe', color: '#1d4ed8' },
+  completed:   { bg: '#dcfce7', color: '#15803d' },
+};
 
 const TaskCard = ({ task, onStatusUpdate }) => {
   const navigate = useNavigate();
   const [isUpdating, setIsUpdating] = useState(false);
 
-  const getTaskIcon = (taskType) => {
-    const icons = {
-      documentation: DocumentTextIcon,
-      training: AcademicCapIcon,
-      setup: WrenchScrewdriverIcon,
-      meeting: CalendarIcon,
-      profile: UserCircleIcon,
-      video: VideoCameraIcon,
-      general: DocumentTextIcon
-    };
-    return icons[taskType] || DocumentTextIcon;
-  };
-
-  const getTaskRoute = (task) => {
-    const routes = {
-      documentation: '/employee/documents',
-      profile: '/employee/profile',
-      training: '/employee/training',
-      video: '/employee/training/video',
-      setup: '/employee/setup',
-      meeting: '/employee/meetings',
-      general: null
-    };
-    
-    if (task.title.toLowerCase().includes('upload') || 
-        task.title.toLowerCase().includes('document')) {
-      return '/employee/documents';
-    }
-    
-    if (task.title.toLowerCase().includes('profile') || 
-        task.title.toLowerCase().includes('information form')) {
-      return '/employee/profile';
-    }
-    
-    return routes[task.taskType] || null;
+  const getTaskRoute = (t) => {
+    // Handbook detection — by taskType OR title keywords
+    if (
+      t.taskType === 'handbook' || t.taskType === 'read_handbook' ||
+      t.title?.toLowerCase().includes('handbook') ||
+      t.title?.toLowerCase().includes('company policy') ||
+      t.title?.toLowerCase().includes('read policy')
+    ) return '/employee/handbook';
+    if (t.title?.toLowerCase().includes('upload') || t.title?.toLowerCase().includes('document')) return '/employee/documents';
+    if (t.title?.toLowerCase().includes('profile') || t.title?.toLowerCase().includes('information form')) return '/employee/profile';
+    return ROUTE_MAP[t.taskType] || null;
   };
 
   const handleStartTask = async () => {
     const route = getTaskRoute(task);
-    
-    if (route) {
-      setIsUpdating(true);
-      try {
-        await onStatusUpdate(task.id, 'in_progress');
-        navigate(route, { 
-          state: { 
-            taskId: task.id,
-            taskTitle: task.title,
-            returnTo: '/employee/tasks'
-          } 
-        });
-      } catch (error) {
-        console.error('Error starting task:', error);
-        setIsUpdating(false);
-      }
-    } else {
-      handleStatusChange('in_progress');
-    }
+    setIsUpdating(true);
+    try {
+      await onStatusUpdate(task.id, 'in_progress');
+      if (route) navigate(route, { state: { taskId: task.id, taskTitle: task.title, returnTo: '/employee/tasks' } });
+    } catch { } finally { if (!getTaskRoute(task)) setIsUpdating(false); }
   };
 
   const handleStatusChange = async (newStatus) => {
     setIsUpdating(true);
-    try {
-      await onStatusUpdate(task.id, newStatus);
-    } catch (error) {
-      console.error('Error updating status:', error);
-    } finally {
-      setIsUpdating(false);
-    }
+    try { await onStatusUpdate(task.id, newStatus); }
+    catch { } finally { setIsUpdating(false); }
   };
 
-  const TaskIcon = getTaskIcon(task.taskType);
+  const TaskIcon = ICON_MAP[task.taskType] || DocumentTextIcon;
+  const ss = STATUS_STYLE[task.status] || STATUS_STYLE.pending;
+  const ps = PRIORITY_STYLE[task.priority] || PRIORITY_STYLE.low;
 
-  const statusStyles = {
-    pending: 'bg-amber-100 text-amber-700 border-amber-200',
-    in_progress: 'bg-blue-100 text-blue-700 border-blue-200',
-    completed: 'bg-green-100 text-green-700 border-green-200'
-  };
+  const iconBg = task.status === 'completed' ? '#dcfce7' : task.status === 'in_progress' ? '#dbeafe' : '#f1f5f9';
+  const iconColor = task.status === 'completed' ? '#15803d' : task.status === 'in_progress' ? '#1d4ed8' : '#64748b';
 
-  const priorityStyles = {
-    critical: 'bg-red-100 text-red-700 border-red-200',
-    high: 'bg-orange-100 text-orange-700 border-orange-200',
-    medium: 'bg-yellow-100 text-yellow-700 border-yellow-200',
-    low: 'bg-gray-100 text-gray-700 border-gray-200'
-  };
+  const Spinner = () => (
+    <div style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,0.35)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+  );
 
   return (
-    <div className={`p-6 hover:bg-gray-50 transition-colors ${
-      task.isOverdue ? 'bg-red-50/50' : ''
-    }`}>
-      <div className="flex items-start justify-between gap-4">
-        {/* Left side - Task info */}
-        <div className="flex-1 space-y-3">
-          <div className="flex items-start gap-3">
-            <div className={`p-2.5 rounded-lg ${
-              task.status === 'completed' ? 'bg-green-100' :
-              task.status === 'in_progress' ? 'bg-blue-100' :
-              'bg-gray-100'
-            }`}>
-              <TaskIcon className={`h-5 w-5 ${
-                task.status === 'completed' ? 'text-green-600' :
-                task.status === 'in_progress' ? 'text-blue-600' :
-                'text-gray-600'
-              }`} />
-            </div>
-            
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap mb-2">
-                <h3 className="text-base font-semibold text-gray-900">
-                  {task.title}
-                </h3>
-                
-                {task.isOverdue && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700 border border-red-200 rounded-full">
-                    <ExclamationTriangleIcon className="h-3 w-3" />
-                    Overdue
-                  </span>
-                )}
-              </div>
-              
-              <p className="text-sm text-gray-600 mb-3">
-                {task.description}
-              </p>
-              
-              <div className="flex items-center gap-3 flex-wrap text-xs text-gray-500">
-                <span className={`inline-flex items-center gap-1 px-2.5 py-1 border rounded-full font-medium ${
-                  statusStyles[task.status]
-                }`}>
-                  {task.status === 'completed' && <CheckCircleIcon className="h-3.5 w-3.5" />}
-                  {task.status === 'in_progress' && <ClockIcon className="h-3.5 w-3.5" />}
-                  {task.status.replace('_', ' ').toUpperCase()}
-                </span>
-                
-                {task.priority && (
-                  <span className={`inline-flex items-center px-2.5 py-1 border rounded-full font-medium ${
-                    priorityStyles[task.priority]
-                  }`}>
-                    {task.priority.toUpperCase()}
-                  </span>
-                )}
-                
-                <span className="inline-flex items-center gap-1">
-                  <ClockIcon className="h-3.5 w-3.5" />
-                  ~{task.estimatedTime} min
-                </span>
-                
-                {task.dueDate && (
-                  <span className={`inline-flex items-center gap-1 ${
-                    task.isOverdue ? 'text-red-600 font-medium' : ''
-                  }`}>
-                    <CalendarIcon className="h-3.5 w-3.5" />
-                    Due: {new Date(task.dueDate).toLocaleDateString()}
-                  </span>
-                )}
-              </div>
+    <div style={{ padding: '18px 22px', background: task.isOverdue ? '#fff7f7' : '#fff', transition: 'background 0.15s', fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+      onMouseEnter={e => e.currentTarget.style.background = task.isOverdue ? '#fff0f0' : '#fafafa'}
+      onMouseLeave={e => e.currentTarget.style.background = task.isOverdue ? '#fff7f7' : '#fff'}>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
-              {task.resourceUrl && (
-                <a 
-                  href={task.resourceUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 mt-2 text-xs text-indigo-600 hover:text-indigo-700"
-                >
-                  <DocumentTextIcon className="h-3.5 w-3.5" />
-                  View Resource
-                </a>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
+        <div style={{ flex: 1, display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+          <div style={{ width: 38, height: 38, borderRadius: 11, background: iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
+            <TaskIcon style={{ width: 18, height: 18, color: iconColor }} />
+          </div>
+
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', margin: 0 }}>{task.title}</h3>
+              {task.isOverdue && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: '#fee2e2', color: '#dc2626' }}>
+                  <ExclamationTriangleIcon style={{ width: 10, height: 10 }} /> Overdue
+                </span>
               )}
             </div>
+
+            {task.description && (
+              <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 8px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{task.description}</p>
+            )}
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 8, background: ss.bg, color: ss.color }}>
+                {task.status === 'completed' ? '✓ Completed' : task.status === 'in_progress' ? 'In Progress' : 'Pending'}
+              </span>
+              {task.priority && (
+                <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 8, background: ps.bg, color: ps.color }}>
+                  {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}
+                </span>
+              )}
+              {task.estimatedTime && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11.5, color: '#94a3b8' }}>
+                  <ClockIcon style={{ width: 12, height: 12 }} /> ~{task.estimatedTime} min
+                </span>
+              )}
+              {task.dueDate && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11.5, color: task.isOverdue ? '#dc2626' : '#94a3b8', fontWeight: task.isOverdue ? 700 : 400 }}>
+                  <CalendarIcon style={{ width: 12, height: 12 }} />
+                  Due: {new Date(task.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </span>
+              )}
+            </div>
+
+            {task.resourceUrl && (
+              <a href={task.resourceUrl} target="_blank" rel="noopener noreferrer"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 6, fontSize: 12, color: '#6366f1', textDecoration: 'none', fontWeight: 700 }}>
+                <DocumentTextIcon style={{ width: 12, height: 12 }} /> View Resource
+              </a>
+            )}
           </div>
         </div>
 
-        {/* Right side - Action buttons */}
-        <div className="flex flex-col gap-2 min-w-fit">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
           {task.status === 'pending' && (
-            <button
-              onClick={handleStartTask}
-              disabled={isUpdating}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-            >
-              {isUpdating ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                  Starting...
-                </>
-              ) : (
-                <>
-                  <PlayIcon className="h-4 w-4" />
-                  Start Task
-                </>
-              )}
+            <button onClick={handleStartTask} disabled={isUpdating}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: '#6366f1', border: 'none', color: '#fff', fontSize: 12.5, fontWeight: 700, borderRadius: 10, cursor: isUpdating ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit', opacity: isUpdating ? 0.8 : 1, transition: 'background 0.15s' }}
+              onMouseEnter={e => { if (!isUpdating) e.currentTarget.style.background = '#4f46e5'; }}
+              onMouseLeave={e => e.currentTarget.style.background = '#6366f1'}>
+              {isUpdating ? <><Spinner /> Starting...</> : <><PlayIcon style={{ width: 14, height: 14 }} /> Start Task</>}
             </button>
           )}
 
           {task.status === 'in_progress' && (
             <>
-              <button
-                onClick={() => {
-                  const route = getTaskRoute(task);
-                  if (route) {
-                    navigate(route, { 
-                      state: { 
-                        taskId: task.id,
-                        taskTitle: task.title,
-                        returnTo: '/employee/tasks'
-                      } 
-                    });
-                  }
-                }}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap"
-              >
-                <ArrowRightIcon className="h-4 w-4" />
-                Continue
+              <button onClick={() => { const route = getTaskRoute(task); if (route) navigate(route, { state: { taskId: task.id, taskTitle: task.title, returnTo: '/employee/tasks' } }); }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: '#3b82f6', border: 'none', color: '#fff', fontSize: 12.5, fontWeight: 700, borderRadius: 10, cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit', transition: 'background 0.15s' }}
+                onMouseEnter={e => e.currentTarget.style.background = '#2563eb'}
+                onMouseLeave={e => e.currentTarget.style.background = '#3b82f6'}>
+                <ArrowRightIcon style={{ width: 14, height: 14 }} /> Continue
               </button>
-              
-              <button
-                onClick={() => handleStatusChange('completed')}
-                disabled={isUpdating}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-              >
-                {isUpdating ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                    Updating...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircleIcon className="h-4 w-4" />
-                    Complete
-                  </>
-                )}
+              <button onClick={() => handleStatusChange('completed')} disabled={isUpdating}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: '#22c55e', border: 'none', color: '#fff', fontSize: 12.5, fontWeight: 700, borderRadius: 10, cursor: isUpdating ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit', opacity: isUpdating ? 0.8 : 1, transition: 'background 0.15s' }}
+                onMouseEnter={e => { if (!isUpdating) e.currentTarget.style.background = '#16a34a'; }}
+                onMouseLeave={e => e.currentTarget.style.background = '#22c55e'}>
+                {isUpdating ? <><Spinner /> Saving...</> : <><CheckCircleIcon style={{ width: 14, height: 14 }} /> Complete</>}
               </button>
             </>
           )}
 
           {task.status === 'completed' && (
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-green-100 text-green-700 text-sm font-medium rounded-lg border border-green-200">
-              <CheckCircleIcon className="h-5 w-5" />
-              Completed
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: '#dcfce7', border: '1.5px solid #86efac', color: '#15803d', fontSize: 12.5, fontWeight: 700, borderRadius: 10, whiteSpace: 'nowrap' }}>
+              <CheckCircleIcon style={{ width: 14, height: 14 }} /> Completed
             </div>
           )}
         </div>

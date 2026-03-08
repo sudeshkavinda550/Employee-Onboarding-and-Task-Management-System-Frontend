@@ -3,127 +3,93 @@ import { taskApi } from '../../api/taskApi';
 import { XMarkIcon, CloudArrowUpIcon, DocumentIcon } from '@heroicons/react/24/outline';
 
 const DocumentUpload = ({ taskId, onUploadComplete, onCancel }) => {
-  const [file, setFile] = useState(null);
+  const [file, setFile]         = useState(null);
   const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError]       = useState('');
 
   const handleFileChange = (e) => {
-    const selectedFile = e.target.files[0];
-    if (selectedFile) {
-      if (selectedFile.size > 10 * 1024 * 1024) {
-        setError('File size must be less than 10MB');
-        return;
-      }
-      setFile(selectedFile);
-      setError('');
-    }
+    const f = e.target.files[0];
+    if (!f) return;
+    if (f.size > 10 * 1024 * 1024) { setError('File size must be less than 10MB'); return; }
+    setFile(f);
+    setError('');
   };
 
   const handleUpload = async () => {
-    if (!file) {
-      setError('Please select a file');
-      return;
-    }
-
-    const formData = new FormData();
-    formData.append('document', file);
-
+    if (!file) { setError('Please select a file'); return; }
+    const fd = new FormData();
+    fd.append('document', file);
     try {
       setUploading(true);
-      await taskApi.uploadTaskDocument(taskId, formData);
+      await taskApi.uploadTaskDocument(taskId, fd);
       onUploadComplete();
-    } catch (error) {
+    } catch {
       setError('Upload failed. Please try again.');
-      console.error('Upload error:', error);
     } finally {
       setUploading(false);
     }
   };
 
   return (
-    <div className="border-2 border-indigo-200 rounded-2xl p-5 bg-gradient-to-br from-indigo-50 to-purple-50">
-      <div className="flex items-center justify-between mb-4">
-        <h4 className="text-sm font-bold text-gray-900">Upload Document</h4>
-        <button 
-          onClick={onCancel} 
-          className="text-gray-400 hover:text-gray-600 transition-colors"
-        >
-          <XMarkIcon className="h-5 w-5" />
+    <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", border: '1.5px solid #c7d2fe', borderRadius: 16, padding: 20, background: 'linear-gradient(135deg, #f5f3ff, #eef2ff)' }}>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <h4 style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', margin: 0 }}>Upload Document</h4>
+        <button onClick={onCancel} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 4, borderRadius: 6 }}
+          onMouseEnter={e => e.currentTarget.style.color = '#6366f1'} onMouseLeave={e => e.currentTarget.style.color = '#94a3b8'}>
+          <XMarkIcon style={{ width: 18, height: 18 }} />
         </button>
       </div>
 
-      <div className="space-y-4">
-        {/* File Upload Area */}
-        <div className="flex items-center justify-center w-full">
-          <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-indigo-300 rounded-xl cursor-pointer bg-white hover:bg-indigo-50/50 transition-all">
-            <div className="flex flex-col items-center justify-center pt-5 pb-6">
-              <CloudArrowUpIcon className="w-10 h-10 mb-3 text-indigo-500" />
-              <p className="mb-2 text-sm text-gray-700">
-                <span className="font-semibold">Click to upload</span> or drag and drop
-              </p>
-              <p className="text-xs text-gray-500">PDF, DOC, JPG, PNG (Max 10MB)</p>
-            </div>
-            <input
-              type="file"
-              className="hidden"
-              onChange={handleFileChange}
-              accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-            />
-          </label>
-        </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 140, border: '2px dashed #a5b4fc', borderRadius: 14, cursor: 'pointer', background: '#fff', transition: 'background 0.15s' }}
+          onMouseEnter={e => e.currentTarget.style.background = '#eef2ff'} onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
+          <CloudArrowUpIcon style={{ width: 36, height: 36, color: '#6366f1', marginBottom: 8 }} />
+          <p style={{ fontSize: 13.5, fontWeight: 700, color: '#374151', margin: '0 0 4px' }}>
+            <span style={{ color: '#6366f1' }}>Click to upload</span> or drag and drop
+          </p>
+          <p style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>PDF, DOC, JPG, PNG (Max 10MB)</p>
+          <input type="file" style={{ display: 'none' }} onChange={handleFileChange} accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" />
+        </label>
 
-        {/* Selected File Display */}
         {file && (
-          <div className="flex items-center justify-between p-4 bg-white border-2 border-indigo-200 rounded-xl">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-indigo-100 rounded-lg">
-                <DocumentIcon className="h-5 w-5 text-indigo-600" />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', background: '#fff', border: '1.5px solid #c7d2fe', borderRadius: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 34, height: 34, background: '#eef2ff', borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <DocumentIcon style={{ width: 16, height: 16, color: '#6366f1' }} />
               </div>
               <div>
-                <p className="text-sm font-semibold text-gray-900">{file.name}</p>
-                <p className="text-xs text-gray-500">
-                  {(file.size / 1024 / 1024).toFixed(2)} MB
-                </p>
+                <p style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', margin: 0 }}>{file.name}</p>
+                <p style={{ fontSize: 11.5, color: '#94a3b8', margin: 0 }}>{(file.size / 1024 / 1024).toFixed(2)} MB</p>
               </div>
             </div>
-            <button
-              onClick={() => setFile(null)}
-              className="text-gray-400 hover:text-red-500 transition-colors"
-            >
-              <XMarkIcon className="h-5 w-5" />
+            <button onClick={() => setFile(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}
+              onMouseEnter={e => e.currentTarget.style.color = '#ef4444'} onMouseLeave={e => e.currentTarget.style.color = '#94a3b8'}>
+              <XMarkIcon style={{ width: 16, height: 16 }} />
             </button>
           </div>
         )}
 
-        {/* Error Message */}
         {error && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded-xl">
-            <p className="text-sm text-red-600">{error}</p>
+          <div style={{ padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10 }}>
+            <p style={{ fontSize: 13, color: '#dc2626', margin: 0 }}>{error}</p>
           </div>
         )}
 
-        {/* Action Buttons */}
-        <div className="flex justify-end gap-3 pt-2">
-          <button
-            onClick={onCancel}
-            className="px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-all"
-            disabled={uploading}
-          >
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 4 }}>
+          <button onClick={onCancel} disabled={uploading}
+            style={{ padding: '8px 18px', fontSize: 13, fontWeight: 700, background: '#fff', border: '1.5px solid #e2e8f0', color: '#475569', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}>
             Cancel
           </button>
-          <button
-            onClick={handleUpload}
-            disabled={!file || uploading}
-            className="px-6 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-          >
+          <button onClick={handleUpload} disabled={!file || uploading}
+            style={{ padding: '8px 22px', fontSize: 13, fontWeight: 700, background: '#6366f1', border: 'none', color: '#fff', borderRadius: 10, cursor: !file || uploading ? 'not-allowed' : 'pointer', opacity: !file ? 0.6 : 1, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 8 }}>
             {uploading ? (
-              <span className="flex items-center gap-2">
-                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+              <>
+                <div style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
                 Uploading...
-              </span>
-            ) : (
-              'Upload'
-            )}
+              </>
+            ) : 'Upload'}
           </button>
         </div>
       </div>

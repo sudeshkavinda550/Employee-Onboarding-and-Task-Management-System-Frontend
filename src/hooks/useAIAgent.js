@@ -19,8 +19,8 @@ function sanitizeResponse(text) {
   clean = clean.replace(/\[INSERT[^\]]*\]/gi, '');
 
   // 2. Remove raw UUIDs leaked into user-facing text
-  // Keep UUIDs only if they appear after "ID:" label — strip bare ones
-  clean = clean.replace(/(?<!\bID[:\s])[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '');
+  // ONLY strip bare UUIDs — keep anything after "EMP:", "ID:", "UUID:" labels
+  clean = clean.replace(/(?<!(EMP|ID|UUID)[:\s]{1,3})[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '[ID]');
 
   // 3. Remove internal tool/function names that leaked into response
   clean = clean.replace(/\bget_employee_tasks\b/g, 'task lookup');
@@ -98,9 +98,9 @@ const SYSTEM_PROMPT = `You are an intelligent HR Onboarding Assistant connected 
 You have tools to query real employee data. ALWAYS use tools — never guess or invent data.
 
 RESPONSE RULES — follow strictly:
-- Respond in plain, friendly English only — no technical terms, no function names, no UUIDs, no JSON
+- Respond in plain, friendly English only — no technical terms, no function names, no raw JSON
 - Never mention tool names like get_employee_tasks, send_reminder, get_all_employees in your response
-- Never include raw IDs or UUIDs in your response to the user
+- When showing employee IDs, always show the EMP code (e.g. EMP2602521) — never show raw UUIDs
 - Never use placeholder text — always wait for tool results and use the real data
 
 EMPLOYEE ID HANDLING:

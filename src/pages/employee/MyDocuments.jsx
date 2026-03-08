@@ -1,661 +1,427 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { documentApi, taskApi } from '../../api';
-import { 
-  DocumentArrowUpIcon, 
-  CheckCircleIcon, 
-  XCircleIcon,
-  ClockIcon,
-  ArrowDownTrayIcon,
-  TrashIcon,
-  EyeIcon,
-  FolderIcon,
-  ArrowLeftIcon,
-  XMarkIcon,
-  ExclamationCircleIcon
+import {
+  DocumentArrowUpIcon, CheckCircleIcon, XCircleIcon, ClockIcon,
+  ArrowDownTrayIcon, TrashIcon, EyeIcon, FolderIcon, ArrowLeftIcon,
+  XMarkIcon, ExclamationCircleIcon, DocumentTextIcon, ShieldCheckIcon,
 } from '@heroicons/react/24/outline';
 import { toast } from 'react-toastify';
+
+const INPUT_STYLE = { width: '100%', padding: '10px 14px', border: '1.5px solid #e2e8f0', borderRadius: 10, background: '#fff', fontSize: 13.5, color: '#0f172a', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', transition: 'border-color 0.15s, box-shadow 0.15s' };
+const focusIn  = e => { e.target.style.borderColor = '#6366f1'; e.target.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.10)'; };
+const focusOut = e => { e.target.style.borderColor = '#e2e8f0'; e.target.style.boxShadow = 'none'; };
+
+const CARD_COLORS = ['#3b82f6', '#f97316', '#22d3ee', '#22c55e', '#a855f7', '#ef4444'];
+const getDocColor = (id) => CARD_COLORS[(id || 0) % CARD_COLORS.length];
+
+const StatusBadge = ({ status }) => {
+  const MAP = { approved: { bg: '#dcfce7', color: '#15803d', label: 'Approved' }, rejected: { bg: '#fee2e2', color: '#dc2626', label: 'Rejected' }, pending: { bg: '#fef9c3', color: '#a16207', label: 'Pending' } };
+  const s = MAP[status] || MAP.pending;
+  return <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 8, background: s.bg, color: s.color }}>{s.label}</span>;
+};
 
 const MyDocuments = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  
-  const taskId = location.state?.taskId;
+  const taskId    = location.state?.taskId;
   const taskTitle = location.state?.taskTitle;
-  const returnTo = location.state?.returnTo || '/employee/tasks';
+  const returnTo  = location.state?.returnTo || '/employee/tasks';
 
-  const [documents, setDocuments] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all');
+  const [documents, setDocuments]           = useState([]);
+  const [loading, setLoading]               = useState(true);
+  const [filter, setFilter]                 = useState('all');
   const [showUploadModal, setShowUploadModal] = useState(false);
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [uploading, setUploading] = useState(false);
-  const [filePreview, setFilePreview] = useState(null);
+  const [selectedFile, setSelectedFile]     = useState(null);
+  const [uploading, setUploading]           = useState(false);
+  const [filePreview, setFilePreview]       = useState(null);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
-  const [previewDocument, setPreviewDocument] = useState(null);
-  const [loadingPreview, setLoadingPreview] = useState(false);
-  const [tasks, setTasks] = useState([]);
+  const [previewDocument, setPreviewDocument]   = useState(null);
+  const [loadingPreview, setLoadingPreview]     = useState(false);
+  const [tasks, setTasks]                   = useState([]);
 
-  useEffect(() => {
-    fetchDocuments();
-    fetchTasks();
-  }, []);
+  useEffect(() => { fetchDocuments(); fetchTasks(); }, []);
 
   const fetchDocuments = async () => {
     try {
       setLoading(true);
-      const response = await documentApi.getMyDocuments();
-      const documentsData = response.data?.data || response.data;
-      setDocuments(Array.isArray(documentsData) ? documentsData : []);
-    } catch (error) {
-      console.error('Error fetching documents:', error);
-      toast.error('Failed to fetch documents');
-      setDocuments([]);
-    } finally {
-      setLoading(false);
-    }
+      const res = await documentApi.getMyDocuments();
+      const data = res.data?.data || res.data;
+      setDocuments(Array.isArray(data) ? data : []);
+    } catch { toast.error('Failed to fetch documents'); setDocuments([]); }
+    finally { setLoading(false); }
   };
 
   const fetchTasks = async () => {
     try {
-      const response = await taskApi.getMyTasks();
-      const tasksData = response.data?.data || response.data;
-      const docTasks = (Array.isArray(tasksData) ? tasksData : []).filter(task => 
-        (task.task_type === 'document_upload' || task.category === 'document_upload') && 
-        task.status !== 'completed'
-      );
-      setTasks(docTasks);
-    } catch (error) {
-      console.error('Error fetching tasks:', error);
-    }
+      const res = await taskApi.getMyTasks();
+      const data = res.data?.data || res.data;
+      setTasks((Array.isArray(data) ? data : []).filter(t => (t.task_type === 'document_upload' || t.category === 'document_upload') && t.status !== 'completed'));
+    } catch {}
   };
 
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
-    if (file) {
-      const maxSize = 10 * 1024 * 1024;
-      if (file.size > maxSize) {
-        toast.error('File size must be less than 10MB');
-        e.target.value = '';
-        return;
-      }
-
-      const validTypes = [
-        'application/pdf',
-        'image/jpeg',
-        'image/jpg', 
-        'image/png',
-        'application/msword',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-      ];
-
-      if (!validTypes.includes(file.type)) {
-        toast.error('Invalid file type. Please upload PDF, JPG, PNG, DOC, or DOCX');
-        e.target.value = '';
-        return;
-      }
-
-      setSelectedFile(file);
-      
-      if (file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setFilePreview({ type: 'image', url: reader.result });
-        };
-        reader.readAsDataURL(file);
-      } else if (file.type === 'application/pdf') {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setFilePreview({ type: 'pdf', url: reader.result });
-        };
-        reader.readAsDataURL(file);
-      } else {
-        setFilePreview({ type: 'document', name: file.name });
-      }
-    }
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { toast.error('File size must be less than 10MB'); e.target.value = ''; return; }
+    const valid = ['application/pdf','image/jpeg','image/jpg','image/png','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    if (!valid.includes(file.type)) { toast.error('Invalid file type. PDF, JPG, PNG, DOC, DOCX only'); e.target.value = ''; return; }
+    setSelectedFile(file);
+    if (file.type.startsWith('image/') || file.type === 'application/pdf') {
+      const reader = new FileReader();
+      reader.onloadend = () => setFilePreview({ type: file.type.startsWith('image/') ? 'image' : 'pdf', url: reader.result });
+      reader.readAsDataURL(file);
+    } else { setFilePreview({ type: 'document', name: file.name }); }
   };
 
   const handleUpload = async () => {
-    if (!selectedFile) {
-      toast.error('Please select a file to upload');
-      return;
-    }
-
+    if (!selectedFile) { toast.error('Please select a file'); return; }
     try {
       setUploading(true);
-      const formData = new FormData();
-      formData.append('document', selectedFile);
-      
-      if (taskId) {
-        formData.append('task_id', String(taskId));
-      }
-
-      const response = await documentApi.uploadDocument(formData);
-      
-      if (response && response.data) {
-        toast.success('Document uploaded successfully! Waiting for HR approval.');
-        setShowUploadModal(false);
-        setSelectedFile(null);
-        setFilePreview(null);
-        await fetchDocuments();
-        await fetchTasks();
-      }
-    } catch (error) {
-      console.error('Error uploading document:', error);
-      let errorMsg = 'Failed to upload document';
-      if (error.response?.data?.message) {
-        errorMsg = error.response.data.message;
-      }
-      toast.error(errorMsg);
-    } finally {
-      setUploading(false);
-    }
+      const fd = new FormData();
+      fd.append('document', selectedFile);
+      if (taskId) fd.append('task_id', String(taskId));
+      await documentApi.uploadDocument(fd);
+      toast.success('Document uploaded successfully! Waiting for HR approval.');
+      setShowUploadModal(false); setSelectedFile(null); setFilePreview(null);
+      await fetchDocuments(); await fetchTasks();
+    } catch (err) { toast.error(err.response?.data?.message || 'Failed to upload document'); }
+    finally { setUploading(false); }
   };
 
   const handleDownload = async (documentId, filename) => {
     try {
-      toast.info('Downloading document...');
-      const response = await documentApi.downloadDocument(documentId);
-      
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', filename);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-      
-      toast.success('Document downloaded successfully');
-    } catch (error) {
-      console.error('Error downloading document:', error);
-      toast.error('Failed to download document');
-    }
+      toast.info('Downloading...');
+      const res = await documentApi.downloadDocument(documentId);
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const a = document.createElement('a'); a.href = url; a.setAttribute('download', filename);
+      document.body.appendChild(a); a.click(); a.remove(); window.URL.revokeObjectURL(url);
+      toast.success('Downloaded successfully');
+    } catch { toast.error('Failed to download document'); }
   };
 
   const handleDelete = async (documentId) => {
-    if (window.confirm('Are you sure you want to delete this document? This action cannot be undone.')) {
-      try {
-        await documentApi.deleteDocument(documentId);
-        toast.success('Document deleted successfully');
-        fetchDocuments();
-      } catch (error) {
-        console.error('Error deleting document:', error);
-        toast.error('Failed to delete document');
-      }
-    }
+    if (!window.confirm('Delete this document? This cannot be undone.')) return;
+    try { await documentApi.deleteDocument(documentId); toast.success('Document deleted'); fetchDocuments(); }
+    catch { toast.error('Failed to delete document'); }
   };
 
-  const handleViewDocument = async (document) => {
+  const handleViewDocument = async (doc) => {
     try {
-      setLoadingPreview(true);
-      setShowPreviewModal(true);
-      setPreviewDocument(document);
-      
-      const response = await documentApi.downloadDocument(document.id);
-      const blob = new Blob([response.data], { type: document.file_type });
+      setLoadingPreview(true); setShowPreviewModal(true); setPreviewDocument(doc);
+      const res = await documentApi.downloadDocument(doc.id);
+      const blob = new Blob([res.data], { type: doc.file_type });
       const url = window.URL.createObjectURL(blob);
-      
-      setPreviewDocument(prev => ({
-        ...prev,
-        previewUrl: url,
-        blob: blob
-      }));
-    } catch (error) {
-      console.error('Error loading document preview:', error);
-      toast.error('Failed to load document preview');
-      setShowPreviewModal(false);
-    } finally {
-      setLoadingPreview(false);
-    }
+      setPreviewDocument(prev => ({ ...prev, previewUrl: url, blob }));
+    } catch { toast.error('Failed to load preview'); setShowPreviewModal(false); }
+    finally { setLoadingPreview(false); }
   };
 
   const closePreviewModal = () => {
-    if (previewDocument?.previewUrl) {
-      window.URL.revokeObjectURL(previewDocument.previewUrl);
-    }
-    setShowPreviewModal(false);
-    setPreviewDocument(null);
-    setLoadingPreview(false);
-  };
-
-  const handleBackToTasks = () => {
-    if (taskId) {
-      const shouldGoBack = window.confirm('You have not completed this task yet. Do you want to go back to tasks?');
-      if (shouldGoBack) {
-        navigate(returnTo);
-      }
-    } else {
-      navigate(returnTo);
-    }
+    if (previewDocument?.previewUrl) window.URL.revokeObjectURL(previewDocument.previewUrl);
+    setShowPreviewModal(false); setPreviewDocument(null); setLoadingPreview(false);
   };
 
   const handleMarkTaskComplete = async () => {
     if (!taskId) return;
-    try {
-      await taskApi.updateTaskStatus(taskId, { status: 'completed' });
-      navigate(returnTo, {
-        state: { successMessage: 'Task marked as complete!' }
-      });
-    } catch (error) {
-      console.error('Error marking task complete:', error);
-      toast.error('Failed to mark task as complete');
-    }
+    try { await taskApi.updateTaskStatus(taskId, { status: 'completed' }); navigate(returnTo, { state: { successMessage: 'Task marked as complete!' } }); }
+    catch { toast.error('Failed to mark task as complete'); }
   };
-
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case 'approved': return <CheckCircleIcon className="h-5 w-5 text-emerald-500" />;
-      case 'rejected': return <XCircleIcon className="h-5 w-5 text-red-500" />;
-      case 'pending': return <ClockIcon className="h-5 w-5 text-amber-500" />;
-      default: return <ClockIcon className="h-5 w-5 text-gray-500" />;
-    }
-  };
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'approved': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-      case 'rejected': return 'bg-red-100 text-red-700 border-red-200';
-      case 'pending': return 'bg-amber-100 text-amber-700 border-amber-200';
-      default: return 'bg-gray-100 text-gray-700 border-gray-200';
-    }
-  };
-
-  const filteredDocuments = Array.isArray(documents) ? documents.filter(doc => {
-    if (filter === 'all') return true;
-    return doc.status === filter;
-  }) : [];
 
   const stats = {
-    total: Array.isArray(documents) ? documents.length : 0,
-    approved: Array.isArray(documents) ? documents.filter(d => d.status === 'approved').length : 0,
-    pending: Array.isArray(documents) ? documents.filter(d => d.status === 'pending').length : 0,
-    rejected: Array.isArray(documents) ? documents.filter(d => d.status === 'rejected').length : 0,
+    total:    documents.length,
+    approved: documents.filter(d => d.status === 'approved').length,
+    pending:  documents.filter(d => d.status === 'pending').length,
+    rejected: documents.filter(d => d.status === 'rejected').length,
   };
 
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-        <div className="relative">
-          <div className="animate-spin rounded-full h-16 w-16 border-4 border-gray-200"></div>
-          <div className="animate-spin rounded-full h-16 w-16 border-4 border-indigo-600 border-t-transparent absolute inset-0"></div>
-        </div>
+  const filteredDocs = documents.filter(d => filter === 'all' || d.status === filter);
+
+  const STAT_CARDS = [
+    { label: 'TOTAL FILES',  value: stats.total,    color: '#3b82f6', WatermarkIcon: FolderIcon         },  
+    { label: 'APPROVED',     value: stats.approved, color: '#22c55e', WatermarkIcon: ShieldCheckIcon    },  
+    { label: 'PENDING',      value: stats.pending,  color: '#f97316', WatermarkIcon: ClockIcon          },  
+    { label: 'REJECTED',     value: stats.rejected, color: '#ef4444', WatermarkIcon: XCircleIcon        },  
+  ];
+
+  const FILTER_TABS = [
+    { key: 'all',      label: `All (${stats.total})`,          active: '#6366f1', text: '#fff' },
+    { key: 'pending',  label: `Pending (${stats.pending})`,    active: '#fef9c3', text: '#a16207', border: '#fde68a' },
+    { key: 'approved', label: `Approved (${stats.approved})`,  active: '#dcfce7', text: '#15803d', border: '#86efac' },
+    { key: 'rejected', label: `Rejected (${stats.rejected})`,  active: '#fee2e2', text: '#dc2626', border: '#fca5a5' },
+  ];
+
+  if (loading) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#f1f5f9', fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      <div style={{ position: 'relative', width: 48, height: 48 }}>
+        <div style={{ position: 'absolute', inset: 0, border: '4px solid #e2e8f0', borderRadius: '50%' }} />
+        <div style={{ position: 'absolute', inset: 0, border: '4px solid transparent', borderTopColor: '#6366f1', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
       </div>
-    );
-  }
+    </div>
+  );
 
   return (
-<div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:bg-gray-900 dark:from-gray-900 dark:via-gray-900 dark:to-gray-900">      <style>{`
-        @keyframes slideUp {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .doc-card { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-        .doc-card:hover { transform: translateY(-4px); }
+    <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", minHeight: '100vh', background: '#f1f5f9', padding: '28px 28px 40px' }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+        @keyframes slideUp { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .stat-card { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+        .stat-card:hover { transform: translateY(-4px); box-shadow: 0 12px 32px rgba(0,0,0,0.15) !important; }
+        .doc-card { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+        .doc-card:hover { transform: translateY(-4px); box-shadow: 0 12px 32px rgba(0,0,0,0.10) !important; }
+        .icon-btn { transition: background 0.15s, color 0.15s; }
       `}</style>
 
-      <div className="px-6 py-6 space-y-6 max-w-[1600px] mx-auto">
-        {stats.rejected > 0 && (
-          <div className="bg-red-50 border-l-4 border-red-500 rounded-lg p-4 mb-4">
-            <div className="flex items-start gap-3">
-              <ExclamationCircleIcon className="h-5 w-5 text-red-600 mt-0.5" />
-              <div>
-                <h3 className="text-sm font-semibold text-red-800">Documents Require Re-upload</h3>
-                <p className="text-sm text-red-700 mt-1">
-                  {stats.rejected} document{stats.rejected > 1 ? 's' : ''} {stats.rejected > 1 ? 'have' : 'has'} been rejected. 
-                  Please review the feedback and upload corrected versions.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
+      <div style={{ maxWidth: 1400, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 24 }}>
 
         {taskId && (
-          <div className="mb-6 p-4 bg-blue-50 border-l-4 border-blue-500 rounded-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-blue-800">📋 Active Task</p>
-                <p className="text-lg font-semibold text-blue-900 mt-1">{taskTitle}</p>
-                <p className="text-xs text-blue-600 mt-1">Task ID: {taskId}</p>
-              </div>
-              <button
-                onClick={handleBackToTasks}
-                className="inline-flex items-center gap-2 px-3 py-2 text-sm text-blue-700 hover:text-blue-800 hover:bg-blue-100 rounded-lg transition-colors"
-              >
-                <ArrowLeftIcon className="h-4 w-4" />
-                Back to Tasks
+          <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderLeft: '4px solid #3b82f6', borderRadius: 14, padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', animation: 'slideUp 0.5s ease-out both' }}>
+            <div>
+              <p style={{ fontSize: 12, fontWeight: 700, color: '#1e40af', margin: '0 0 3px', letterSpacing: '0.04em' }}>ACTIVE TASK</p>
+              <p style={{ fontSize: 14.5, fontWeight: 800, color: '#1e3a8a', margin: 0 }}>{taskTitle}</p>
+            </div>
+            <button onClick={() => navigate(returnTo)}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: '#fff', border: '1.5px solid #bfdbfe', color: '#1d4ed8', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+              <ArrowLeftIcon style={{ width: 14, height: 14 }} /> Back to Tasks
+            </button>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 14, animation: 'slideUp 0.5s ease-out both' }}>
+          <div>
+            <h1 style={{ fontSize: 30, fontWeight: 800, color: '#0f172a', margin: 0 }}>My Documents</h1>
+            <p style={{ fontSize: 14.5, color: '#64748b', margin: '4px 0 0' }}>Upload and manage your onboarding documents</p>
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            {taskId && (
+              <button onClick={handleMarkTaskComplete}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', background: '#22c55e', border: 'none', color: '#fff', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                <CheckCircleIcon style={{ width: 16, height: 16 }} /> Mark Complete
               </button>
+            )}
+            <button onClick={() => setShowUploadModal(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', background: '#6366f1', border: 'none', color: '#fff', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 4px 14px rgba(99,102,241,0.35)' }}>
+              <DocumentArrowUpIcon style={{ width: 16, height: 16 }} /> Upload Document
+            </button>
+          </div>
+        </div>
+
+        {stats.rejected > 0 && (
+          <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderLeft: '4px solid #ef4444', borderRadius: 14, padding: '14px 20px', display: 'flex', gap: 12, alignItems: 'flex-start', animation: 'slideUp 0.5s ease-out both' }}>
+            <ExclamationCircleIcon style={{ width: 18, height: 18, color: '#ef4444', flexShrink: 0, marginTop: 1 }} />
+            <div>
+              <p style={{ fontSize: 13.5, fontWeight: 700, color: '#991b1b', margin: '0 0 3px' }}>Documents Require Re-upload</p>
+              <p style={{ fontSize: 13, color: '#b91c1c', margin: 0 }}>
+                {stats.rejected} document{stats.rejected > 1 ? 's' : ''} {stats.rejected > 1 ? 'have' : 'has'} been rejected. Please review feedback and upload corrected versions.
+              </p>
             </div>
           </div>
         )}
 
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <h1 className="text-4xl font-bold text-gray-900 mb-2 tracking-tight">My Documents</h1>
-            <p className="text-gray-600 text-lg">Upload and manage your onboarding documents</p>
-          </div>
-          <div className="flex gap-3">
-            {taskId && (
-              <button
-                onClick={handleMarkTaskComplete}
-                className="px-6 py-3 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition-all flex items-center gap-2"
-              >
-                <CheckCircleIcon className="h-5 w-5" />
-                Mark Complete
-              </button>
-            )}
-            <button
-              onClick={() => setShowUploadModal(true)}
-              className="px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl font-medium shadow-lg hover:shadow-xl transition-all flex items-center gap-2"
-            >
-              <DocumentArrowUpIcon className="h-5 w-5" />
-              Upload Document
-            </button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
-          <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl shadow-sm p-6 text-white" style={{ animation: 'slideUp 0.6s ease-out forwards', opacity: 0 }}>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-white/80 text-sm font-medium mb-1">TOTAL FILES</p>
-                <p className="text-3xl font-bold">{stats.total}</p>
-              </div>
-              <div className="p-3 bg-white/20 rounded-xl">
-                <FolderIcon className="h-6 w-6" />
-              </div>
-            </div>
-          </div>
-          <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl shadow-sm p-6 text-white" style={{ animation: 'slideUp 0.6s ease-out 100ms forwards', opacity: 0 }}>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-white/80 text-sm font-medium mb-1">APPROVED</p>
-                <p className="text-3xl font-bold">{stats.approved}</p>
-              </div>
-              <div className="p-3 bg-white/20 rounded-xl">
-                <CheckCircleIcon className="h-6 w-6" />
-              </div>
-            </div>
-          </div>
-          <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl shadow-sm p-6 text-white" style={{ animation: 'slideUp 0.6s ease-out 200ms forwards', opacity: 0 }}>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-white/80 text-sm font-medium mb-1">PENDING</p>
-                <p className="text-3xl font-bold">{stats.pending}</p>
-              </div>
-              <div className="p-3 bg-white/20 rounded-xl">
-                <ClockIcon className="h-6 w-6" />
-              </div>
-            </div>
-          </div>
-          <div className="bg-gradient-to-br from-red-500 to-rose-600 rounded-2xl shadow-sm p-6 text-white" style={{ animation: 'slideUp 0.6s ease-out 300ms forwards', opacity: 0 }}>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-white/80 text-sm font-medium mb-1">REJECTED</p>
-                <p className="text-3xl font-bold">{stats.rejected}</p>
-              </div>
-              <div className="p-3 bg-white/20 rounded-xl">
-                <XCircleIcon className="h-6 w-6" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm border border-gray-100 p-4">
-          <div className="flex flex-wrap gap-3">
-            <button
-              onClick={() => setFilter('all')}
-              className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${
-                filter === 'all' 
-                  ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-md' 
-                  : 'text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              All Documents ({stats.total})
-            </button>
-            <button
-              onClick={() => setFilter('pending')}
-              className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${
-                filter === 'pending' 
-                  ? 'bg-amber-100 text-amber-700 border border-amber-200' 
-                  : 'text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              Pending ({stats.pending})
-            </button>
-            <button
-              onClick={() => setFilter('approved')}
-              className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${
-                filter === 'approved' 
-                  ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' 
-                  : 'text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              Approved ({stats.approved})
-            </button>
-            <button
-              onClick={() => setFilter('rejected')}
-              className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${
-                filter === 'rejected' 
-                  ? 'bg-red-100 text-red-700 border border-red-200' 
-                  : 'text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              Rejected ({stats.rejected})
-            </button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredDocuments.map((document, index) => (
-            <div 
-              key={document.id} 
-              className="doc-card bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm border border-gray-100 overflow-hidden"
+        {/* ── Stat cards with watermark icons ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
+          {STAT_CARDS.map((card, i) => (
+            <div key={card.label} className="stat-card"
               style={{
-                animation: 'slideUp 0.5s ease-out',
-                animationDelay: `${400 + index * 50}ms`,
-                opacity: 0,
-                animationFillMode: 'forwards'
-              }}
-            >
-              <div className="p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    {getStatusIcon(document.status)}
-                    <div>
-                      <h3 className="text-sm font-semibold text-gray-900 truncate max-w-[200px]">
-                        {document.task_title || document.original_filename || 'Document'}
-                      </h3>
-                      <p className="text-xs text-gray-500">
-                        {document.uploaded_date ? new Date(document.uploaded_date).toLocaleDateString() : 'Unknown date'}
-                      </p>
-                    </div>
-                  </div>
-                  <span className={`px-3 py-1 text-xs font-medium rounded-lg border ${getStatusColor(document.status)}`}>
-                    {document.status || 'unknown'}
-                  </span>
-                </div>
-
-                <div className="space-y-3 mb-4">
-                  <div>
-                    <p className="text-xs font-medium text-gray-500 mb-1">File Name</p>
-                    <p className="text-sm text-gray-900 truncate font-medium">{document.original_filename || document.filename || 'No filename'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium text-gray-500 mb-1">File Size</p>
-                    <p className="text-sm text-gray-900">
-                      {document.file_size ? `${(document.file_size / 1024 / 1024).toFixed(2)} MB` : 'Unknown'}
-                    </p>
-                  </div>
-                </div>
-
-                {document.rejection_reason && document.status === 'rejected' && (
-                  <div className="mb-4 p-3 bg-red-50 rounded-xl border border-red-100">
-                    <p className="text-xs font-medium text-red-800 mb-1">Rejection Reason</p>
-                    <p className="text-sm text-red-700">{document.rejection_reason}</p>
-                  </div>
-                )}
-
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleDownload(document.id, document.original_filename || document.filename)}
-                    className="flex-1 flex items-center justify-center px-3 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all"
-                  >
-                    <ArrowDownTrayIcon className="h-4 w-4 mr-1.5" />
-                    Download
-                  </button>
-                  <button
-                    onClick={() => handleViewDocument(document)}
-                    className="p-2.5 text-gray-600 hover:text-indigo-600 bg-gray-100 hover:bg-indigo-50 rounded-xl transition-all"
-                    title="Preview"
-                  >
-                    <EyeIcon className="h-4 w-4" />
-                  </button>
-                  {document.status === 'rejected' && (
-                    <button
-                      onClick={() => {
-                        setSelectedFile(null);
-                        setFilePreview(null);
-                        setShowUploadModal(true);
-                      }}
-                      className="p-2.5 text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all"
-                      title="Re-upload"
-                    >
-                      <DocumentArrowUpIcon className="h-4 w-4" />
-                    </button>
-                  )}
-                  <button
-                    onClick={() => handleDelete(document.id)}
-                    className="p-2.5 text-gray-600 hover:text-red-600 bg-gray-100 hover:bg-red-50 rounded-xl transition-all"
-                    title="Delete"
-                  >
-                    <TrashIcon className="h-4 w-4" />
-                  </button>
-                </div>
+                background: card.color,
+                borderRadius: 20,
+                padding: '22px 20px 18px',
+                color: '#fff',
+                boxShadow: `0 4px 18px ${card.color}55`,
+                animation: `slideUp 0.5s ease-out ${i * 60}ms both`,
+                position: 'relative',
+                overflow: 'hidden',
+              }}>
+              {/* Watermark icon */}
+              <div style={{ position: 'absolute', right: -14, bottom: -14, opacity: 0.13, pointerEvents: 'none' }}>
+                <card.WatermarkIcon style={{ width: 96, height: 96, color: '#fff' }} />
+              </div>
+              {/* Content */}
+              <div style={{ position: 'relative', zIndex: 1 }}>
+                <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', opacity: 0.88, marginBottom: 10, textAlign: 'center' }}>{card.label}</div>
+                <div style={{ fontSize: 42, fontWeight: 800, lineHeight: 1, textAlign: 'center' }}>{card.value}</div>
               </div>
             </div>
           ))}
         </div>
 
-        {filteredDocuments.length === 0 && (
-          <div className="text-center py-16 bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm border border-gray-100">
-            <DocumentArrowUpIcon className="mx-auto h-16 w-16 text-indigo-300 mb-4" />
-            <h3 className="text-xl font-bold text-gray-900 mb-2">No documents found</h3>
-            <p className="text-gray-600 mb-6">
-              {filter === 'all' 
-                ? 'You haven\'t uploaded any documents yet.' 
-                : `No documents with status "${filter}"`}
-            </p>
-            <button 
-              onClick={() => setShowUploadModal(true)}
-              className="px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl font-medium shadow-lg hover:shadow-xl transition-all inline-flex items-center gap-2"
-            >
-              <DocumentArrowUpIcon className="h-5 w-5" />
-              Upload Your First Document
+        <div style={{ background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)', borderRadius: 20, padding: '22px 28px', position: 'relative', overflow: 'hidden', animation: 'slideUp 0.5s ease-out 240ms both' }}>
+          <div style={{ position: 'absolute', right: 24, top: '50%', transform: 'translateY(-50%)', opacity: 0.07 }}>
+            <FolderIcon style={{ width: 100, height: 100, color: '#fff' }} />
+          </div>
+          <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 14 }}>
+            <div>
+              <h2 style={{ fontSize: 17, fontWeight: 800, color: '#fff', margin: '0 0 4px' }}>Document Library</h2>
+              <p style={{ fontSize: 13, color: '#94a3b8', margin: 0 }}>Filter your uploaded documents by status</p>
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {FILTER_TABS.map(tab => (
+                <button key={tab.key} onClick={() => setFilter(tab.key)}
+                  style={{ padding: '8px 16px', borderRadius: 10, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', border: filter === tab.key && tab.border ? `1.5px solid ${tab.border}` : 'none', background: filter === tab.key ? tab.active : 'rgba(255,255,255,0.10)', color: filter === tab.key ? tab.text : 'rgba(255,255,255,0.75)', transition: 'all 0.15s' }}>
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {filteredDocs.length === 0 ? (
+          <div style={{ background: '#fff', borderRadius: 20, border: '1px solid #e2e8f0', padding: '64px 24px', textAlign: 'center' }}>
+            <div style={{ width: 56, height: 56, background: '#eef2ff', borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
+              <DocumentArrowUpIcon style={{ width: 24, height: 24, color: '#6366f1' }} />
+            </div>
+            <p style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: '0 0 4px' }}>No documents found</p>
+            <p style={{ fontSize: 13, color: '#94a3b8', margin: '0 0 18px' }}>{filter === 'all' ? "You haven't uploaded any documents yet." : `No documents with status "${filter}"`}</p>
+            <button onClick={() => setShowUploadModal(true)}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 22px', background: '#6366f1', border: 'none', color: '#fff', borderRadius: 10, fontSize: 13.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+              <DocumentArrowUpIcon style={{ width: 16, height: 16 }} /> Upload Your First Document
             </button>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
+            {filteredDocs.map((doc, i) => {
+              const c = getDocColor(i);
+              return (
+                <div key={doc.id} className="doc-card" style={{ background: '#fff', borderRadius: 20, border: '1px solid #e2e8f0', overflow: 'hidden', animation: `slideUp 0.4s ease-out ${i * 40}ms both` }}>
+                  <div style={{ height: 5, background: c }} />
+                  <div style={{ padding: 20 }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 14 }}>
+                      <div style={{ width: 40, height: 40, borderRadius: 12, background: `${c}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <DocumentArrowUpIcon style={{ width: 18, height: 18, color: c }} />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <h3 style={{ fontSize: 13.5, fontWeight: 800, color: '#0f172a', margin: '0 0 3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {doc.task_title || doc.original_filename || 'Document'}
+                        </h3>
+                        <p style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>
+                          {doc.uploaded_date ? new Date(doc.uploaded_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Unknown date'}
+                        </p>
+                      </div>
+                      <StatusBadge status={doc.status} />
+                    </div>
+
+                    <div style={{ background: '#f8fafc', borderRadius: 12, padding: '10px 14px', marginBottom: 14, border: '1px solid #f1f5f9' }}>
+                      <div style={{ marginBottom: 6 }}>
+                        <p style={{ fontSize: 10.5, fontWeight: 700, color: '#94a3b8', margin: '0 0 2px', letterSpacing: '0.04em' }}>FILE NAME</p>
+                        <p style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.original_filename || doc.filename || 'No filename'}</p>
+                      </div>
+                      <div>
+                        <p style={{ fontSize: 10.5, fontWeight: 700, color: '#94a3b8', margin: '0 0 2px', letterSpacing: '0.04em' }}>SIZE</p>
+                        <p style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', margin: 0 }}>{doc.file_size ? `${(doc.file_size / 1024 / 1024).toFixed(2)} MB` : 'Unknown'}</p>
+                      </div>
+                    </div>
+
+                    {doc.status === 'rejected' && doc.rejection_reason && (
+                      <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 12, padding: '10px 14px', marginBottom: 14 }}>
+                        <p style={{ fontSize: 11, fontWeight: 700, color: '#991b1b', margin: '0 0 4px', letterSpacing: '0.04em' }}>REJECTION REASON</p>
+                        <p style={{ fontSize: 12.5, color: '#b91c1c', margin: 0 }}>{doc.rejection_reason}</p>
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', gap: 7, paddingTop: 12, borderTop: '1px solid #f1f5f9' }}>
+                      <button className="icon-btn" onClick={() => handleDownload(doc.id, doc.original_filename || doc.filename)}
+                        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '8px', fontSize: 12.5, fontWeight: 700, background: '#f1f5f9', border: 'none', color: '#475569', borderRadius: 9, cursor: 'pointer', fontFamily: 'inherit' }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#e2e8f0'} onMouseLeave={e => e.currentTarget.style.background = '#f1f5f9'}>
+                        <ArrowDownTrayIcon style={{ width: 14, height: 14 }} /> Download
+                      </button>
+                      <button className="icon-btn" onClick={() => handleViewDocument(doc)} title="Preview"
+                        style={{ width: 36, height: 36, borderRadius: 9, background: '#f1f5f9', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#64748b' }}
+                        onMouseEnter={e => { e.currentTarget.style.background = '#eef2ff'; e.currentTarget.style.color = '#6366f1'; }} onMouseLeave={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#64748b'; }}>
+                        <EyeIcon style={{ width: 15, height: 15 }} />
+                      </button>
+                      {doc.status === 'rejected' && (
+                        <button className="icon-btn" onClick={() => { setSelectedFile(null); setFilePreview(null); setShowUploadModal(true); }} title="Re-upload"
+                          style={{ width: 36, height: 36, borderRadius: 9, background: '#6366f1', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                          onMouseEnter={e => e.currentTarget.style.background = '#4f46e5'} onMouseLeave={e => e.currentTarget.style.background = '#6366f1'}>
+                          <DocumentArrowUpIcon style={{ width: 15, height: 15, color: '#fff' }} />
+                        </button>
+                      )}
+                      <button className="icon-btn" onClick={() => handleDelete(doc.id)} title="Delete"
+                        style={{ width: 36, height: 36, borderRadius: 9, background: '#f1f5f9', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#64748b' }}
+                        onMouseEnter={e => { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.color = '#ef4444'; }} onMouseLeave={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#64748b'; }}>
+                        <TrashIcon style={{ width: 15, height: 15 }} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
 
       {showUploadModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h3 className="text-xl font-bold text-gray-900">Upload Document</h3>
-              <button
-                onClick={() => {
-                  setShowUploadModal(false);
-                  setSelectedFile(null);
-                  setFilePreview(null);
-                }}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <XMarkIcon className="h-6 w-6" />
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, zIndex: 50, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+          <div style={{ background: '#fff', borderRadius: 24, boxShadow: '0 24px 80px rgba(0,0,0,0.2)', width: '100%', maxWidth: 580, maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ height: 5, background: 'linear-gradient(90deg, #6366f1, #a855f7, #ec4899)', flexShrink: 0 }} />
+            <div style={{ padding: '18px 24px', background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+              <div>
+                <h2 style={{ fontSize: 17, fontWeight: 800, color: '#fff', margin: 0 }}>Upload Document</h2>
+                {taskTitle && <p style={{ fontSize: 12.5, color: '#94a3b8', margin: '2px 0 0' }}>For: {taskTitle}</p>}
+              </div>
+              <button onClick={() => { setShowUploadModal(false); setSelectedFile(null); setFilePreview(null); }}
+                style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.10)', border: 'none', borderRadius: 8, color: 'rgba(255,255,255,0.75)', cursor: 'pointer' }}>
+                <XMarkIcon style={{ width: 16, height: 16 }} />
               </button>
             </div>
-            <div className="p-6 space-y-4">
+            <div style={{ padding: 24, overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 16 }}>
               {!taskId && tasks.length > 0 && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Select Task (Optional)
-                  </label>
-                  <select
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                    onChange={(e) => {
-                      if (e.target.value) {
-                        navigate('/employee/documents', {
-                          state: {
-                            taskId: parseInt(e.target.value),
-                            taskTitle: e.target.options[e.target.selectedIndex].text,
-                            returnTo: '/employee/tasks'
-                          }
-                        });
-                      }
-                    }}
-                  >
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 6, letterSpacing: '0.04em' }}>LINK TO TASK (Optional)</label>
+                  <select onChange={e => { if (e.target.value) navigate('/employee/documents', { state: { taskId: parseInt(e.target.value), taskTitle: e.target.options[e.target.selectedIndex].text, returnTo: '/employee/tasks' } }); }}
+                    style={INPUT_STYLE} onFocus={focusIn} onBlur={focusOut}>
                     <option value="">-- Select a task --</option>
-                    {tasks.map(task => (
-                      <option key={task.id} value={task.id}>{task.title}</option>
-                    ))}
+                    {tasks.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
                   </select>
-                  <p className="mt-1 text-xs text-gray-500">
-                    Selecting a task will automatically link this document to it
-                  </p>
                 </div>
               )}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Select File *
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 6, letterSpacing: '0.04em' }}>SELECT FILE *</label>
+                <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 140, border: '2px dashed #c7d2fe', borderRadius: 14, cursor: 'pointer', background: '#f5f3ff', transition: 'background 0.15s' }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#ede9fe'} onMouseLeave={e => e.currentTarget.style.background = '#f5f3ff'}>
+                  <DocumentArrowUpIcon style={{ width: 36, height: 36, color: '#6366f1', marginBottom: 8 }} />
+                  <p style={{ fontSize: 13.5, fontWeight: 700, color: '#374151', margin: '0 0 4px' }}>Click to upload or drag & drop</p>
+                  <p style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>PDF, JPG, PNG, DOC, DOCX (Max 10MB)</p>
+                  <input type="file" style={{ display: 'none' }} onChange={handleFileSelect} accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" />
                 </label>
-                <input
-                  type="file"
-                  onChange={handleFileSelect}
-                  accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                  className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
-                />
-                <p className="mt-1 text-xs text-gray-500">
-                  PDF, JPG, PNG, DOC, DOCX (Max 10MB)
-                </p>
               </div>
-              {filePreview && (
-                <div className="mt-4 p-4 bg-gray-50 rounded-xl border border-gray-200">
-                  <p className="text-sm font-medium text-gray-700 mb-3">Preview:</p>
-                  {filePreview.type === 'image' && (
-                    <img src={filePreview.url} alt="Preview" className="max-h-64 mx-auto rounded-lg shadow-sm" />
-                  )}
-                  {filePreview.type === 'pdf' && (
-                    <div className="text-center">
-                      <iframe src={filePreview.url} className="w-full h-64 rounded-lg border border-gray-300" title="PDF Preview" />
+              {selectedFile && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#eef2ff', border: '1.5px solid #c7d2fe', borderRadius: 12, padding: '12px 14px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 34, height: 34, background: '#6366f1', borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <DocumentArrowUpIcon style={{ width: 16, height: 16, color: '#fff' }} />
                     </div>
-                  )}
+                    <div>
+                      <p style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', margin: 0 }}>{selectedFile.name}</p>
+                      <p style={{ fontSize: 11.5, color: '#64748b', margin: 0 }}>{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                    </div>
+                  </div>
+                  <button onClick={() => { setSelectedFile(null); setFilePreview(null); }} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
+                    <XMarkIcon style={{ width: 16, height: 16 }} />
+                  </button>
+                </div>
+              )}
+              {filePreview && (
+                <div style={{ background: '#f8fafc', borderRadius: 12, padding: 12, border: '1px solid #e2e8f0' }}>
+                  {filePreview.type === 'image' && <img src={filePreview.url} alt="Preview" style={{ maxHeight: 220, margin: '0 auto', display: 'block', borderRadius: 10, boxShadow: '0 4px 16px rgba(0,0,0,0.08)' }} />}
+                  {filePreview.type === 'pdf' && <iframe src={filePreview.url} style={{ width: '100%', height: 220, borderRadius: 10, border: '1px solid #e2e8f0' }} title="PDF Preview" />}
                   {filePreview.type === 'document' && (
-                    <div className="text-center py-8">
-                      <DocumentArrowUpIcon className="h-16 w-16 text-gray-400 mx-auto mb-2" />
-                      <p className="text-sm text-gray-600">{filePreview.name}</p>
-                      <p className="text-xs text-gray-500 mt-1">Preview not available for this file type</p>
+                    <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                      <DocumentArrowUpIcon style={{ width: 40, height: 40, color: '#94a3b8', margin: '0 auto 8px' }} />
+                      <p style={{ fontSize: 13, color: '#64748b', margin: 0 }}>Preview not available</p>
                     </div>
                   )}
                 </div>
               )}
             </div>
-            <div className="flex gap-3 p-6 border-t border-gray-200">
-              <button
-                onClick={() => {
-                  setShowUploadModal(false);
-                  setSelectedFile(null);
-                  setFilePreview(null);
-                }}
-                className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-all"
-                disabled={uploading}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleUpload}
-                disabled={uploading || !selectedFile}
-                className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-              >
-                {uploading ? 'Uploading...' : 'Upload'}
+            <div style={{ display: 'flex', gap: 10, padding: '14px 24px', borderTop: '1px solid #f1f5f9', background: '#fff', flexShrink: 0 }}>
+              <button onClick={() => { setShowUploadModal(false); setSelectedFile(null); setFilePreview(null); }} disabled={uploading}
+                style={{ flex: 1, padding: '10px', fontSize: 13.5, fontWeight: 700, background: '#fff', border: '1.5px solid #e2e8f0', color: '#475569', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+              <button onClick={handleUpload} disabled={uploading || !selectedFile}
+                style={{ flex: 1, padding: '10px', fontSize: 13.5, fontWeight: 700, background: '#6366f1', border: 'none', color: '#fff', borderRadius: 10, cursor: uploading || !selectedFile ? 'not-allowed' : 'pointer', opacity: !selectedFile ? 0.6 : 1, fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                {uploading ? <><div style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />Uploading...</> : 'Upload'}
               </button>
             </div>
           </div>
@@ -663,69 +429,51 @@ const MyDocuments = () => {
       )}
 
       {showPreviewModal && previewDocument && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, zIndex: 50, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+          <div style={{ background: '#fff', borderRadius: 24, boxShadow: '0 24px 80px rgba(0,0,0,0.3)', width: '100%', maxWidth: 900, maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ height: 5, background: 'linear-gradient(90deg, #6366f1, #a855f7, #ec4899)', flexShrink: 0 }} />
+            <div style={{ padding: '16px 24px', background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
               <div>
-                <h3 className="text-xl font-bold text-gray-900">Document Preview</h3>
-                <p className="text-sm text-gray-600 mt-1">{previewDocument.original_filename || previewDocument.filename}</p>
+                <h2 style={{ fontSize: 16, fontWeight: 800, color: '#fff', margin: 0 }}>Document Preview</h2>
+                <p style={{ fontSize: 12, color: '#94a3b8', margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 400 }}>{previewDocument.original_filename || previewDocument.filename}</p>
               </div>
-              <button
-                onClick={closePreviewModal}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <XMarkIcon className="h-6 w-6" />
-              </button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => handleDownload(previewDocument.id, previewDocument.original_filename || previewDocument.filename)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: 'rgba(255,255,255,0.10)', border: 'none', color: '#fff', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                  <ArrowDownTrayIcon style={{ width: 14, height: 14 }} /> Download
+                </button>
+                <button onClick={closePreviewModal} style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.10)', border: 'none', borderRadius: 8, color: 'rgba(255,255,255,0.75)', cursor: 'pointer' }}>
+                  <XMarkIcon style={{ width: 16, height: 16 }} />
+                </button>
+              </div>
             </div>
-            <div className="flex-1 overflow-auto p-6 bg-gray-50">
+            <div style={{ flex: 1, overflowY: 'auto', background: '#f8fafc', padding: 24 }}>
               {loadingPreview ? (
-                <div className="flex items-center justify-center h-96">
-                  <div className="relative">
-                    <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-200"></div>
-                    <div className="animate-spin rounded-full h-12 w-12 border-4 border-indigo-600 border-t-transparent absolute inset-0"></div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 320 }}>
+                  <div style={{ position: 'relative', width: 48, height: 48 }}>
+                    <div style={{ position: 'absolute', inset: 0, border: '4px solid #e2e8f0', borderRadius: '50%' }} />
+                    <div style={{ position: 'absolute', inset: 0, border: '4px solid transparent', borderTopColor: '#6366f1', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
                   </div>
                 </div>
+              ) : previewDocument.file_type?.startsWith('image/') ? (
+                <img src={previewDocument.previewUrl} alt={previewDocument.original_filename} style={{ maxWidth: '100%', margin: '0 auto', display: 'block', borderRadius: 12, boxShadow: '0 4px 20px rgba(0,0,0,0.10)' }} />
+              ) : previewDocument.file_type === 'application/pdf' ? (
+                <iframe src={previewDocument.previewUrl} style={{ width: '100%', height: '65vh', borderRadius: 12, border: '1px solid #e2e8f0' }} title="PDF Preview" />
               ) : (
-                <>
-                  {previewDocument.file_type?.startsWith('image/') && (
-                    <img 
-                      src={previewDocument.previewUrl} 
-                      alt={previewDocument.original_filename}
-                      className="max-w-full max-h-full mx-auto rounded-lg shadow-lg"
-                    />
-                  )}
-                  {previewDocument.file_type === 'application/pdf' && (
-                    <iframe 
-                      src={previewDocument.previewUrl} 
-                      className="w-full h-[70vh] rounded-lg border border-gray-300"
-                      title="PDF Preview"
-                    />
-                  )}
-                  {!previewDocument.file_type?.startsWith('image/') && 
-                   previewDocument.file_type !== 'application/pdf' && (
-                    <div className="text-center py-16">
-                      <DocumentArrowUpIcon className="h-24 w-24 text-gray-400 mx-auto mb-4" />
-                      <p className="text-lg text-gray-600">Preview not available for this file type</p>
-                      <p className="text-sm text-gray-500 mt-2">Click download to view the file</p>
-                      <button
-                        onClick={() => handleDownload(previewDocument.id, previewDocument.original_filename || previewDocument.filename)}
-                        className="mt-4 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all inline-flex items-center gap-2"
-                      >
-                        <ArrowDownTrayIcon className="h-5 w-5" />
-                        Download Document
-                      </button>
-                    </div>
-                  )}
-                </>
+                <div style={{ textAlign: 'center', padding: '60px 24px' }}>
+                  <div style={{ width: 64, height: 64, background: '#eef2ff', borderRadius: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
+                    <DocumentArrowUpIcon style={{ width: 28, height: 28, color: '#6366f1' }} />
+                  </div>
+                  <p style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: '0 0 6px' }}>Preview not available</p>
+                  <button onClick={() => handleDownload(previewDocument.id, previewDocument.original_filename || previewDocument.filename)}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 22px', background: '#6366f1', border: 'none', color: '#fff', borderRadius: 10, fontSize: 13.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                    <ArrowDownTrayIcon style={{ width: 16, height: 16 }} /> Download File
+                  </button>
+                </div>
               )}
             </div>
-            <div className="p-4 border-t border-gray-200 bg-white">
-              <button
-                onClick={closePreviewModal}
-                className="w-full px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-all"
-              >
-                Close
-              </button>
+            <div style={{ padding: '14px 24px', borderTop: '1px solid #f1f5f9', background: '#fff', flexShrink: 0 }}>
+              <button onClick={closePreviewModal} style={{ width: '100%', padding: '10px', fontSize: 13.5, fontWeight: 700, background: '#fff', border: '1.5px solid #e2e8f0', color: '#475569', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}>Close Preview</button>
             </div>
           </div>
         </div>

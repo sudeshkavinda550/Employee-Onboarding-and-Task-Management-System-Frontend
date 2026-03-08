@@ -31,6 +31,7 @@ import Employees from './pages/hr/Employees';
 import Analytics from './pages/hr/Analytics';
 import CreateTemplate from './pages/hr/CreateTemplate';
 import AIAssistant from './pages/hr/AIAssistant';
+import EmployeeList from './components/hr/EmployeeList';
 
 // Admin
 import AdminDashboard  from './components/dashboard/AdminDashboard';
@@ -42,7 +43,6 @@ import AdminAuditLog   from './pages/admin/AdminAuditLog';
 import AdminSettings   from './pages/admin/AdminSettings';
 
 import Notifications from './pages/Notifications';
-
 import Unauthorized from './pages/Unauthorized';
 import NotFound from './pages/NotFound';
 
@@ -53,15 +53,15 @@ const App = () => {
         <NotificationProvider>
           <ThemeProvider>
             <div className="min-h-screen bg-gray-50 dark:bg-gray-900 dark:text-gray-100 transition-colors duration-300">
-
               <Routes>
-
+                {/* Public Routes */}
                 <Route path="/" element={<Home />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
 
+                {/* Protected Routes with Layout */}
                 <Route
                   element={
                     <ProtectedRoute>
@@ -69,9 +69,7 @@ const App = () => {
                     </ProtectedRoute>
                   }
                 >
-
                   {/* Employee Routes */}
-
                   <Route
                     path="/employee/dashboard"
                     element={
@@ -80,7 +78,6 @@ const App = () => {
                       </RoleBasedRoute>
                     }
                   />
-
                   <Route
                     path="/employee/tasks"
                     element={
@@ -89,7 +86,6 @@ const App = () => {
                       </RoleBasedRoute>
                     }
                   />
-
                   <Route
                     path="/employee/documents"
                     element={
@@ -98,7 +94,6 @@ const App = () => {
                       </RoleBasedRoute>
                     }
                   />
-
                   <Route
                     path="/employee/handbook"
                     element={
@@ -107,7 +102,6 @@ const App = () => {
                       </RoleBasedRoute>
                     }
                   />
-
                   <Route
                     path="/employee/profile"
                     element={
@@ -116,7 +110,6 @@ const App = () => {
                       </RoleBasedRoute>
                     }
                   />
-
                   <Route
                     path="/employee/notifications"
                     element={
@@ -127,7 +120,6 @@ const App = () => {
                   />
 
                   {/* HR Routes */}
-
                   <Route
                     path="/hr/dashboard"
                     element={
@@ -136,7 +128,6 @@ const App = () => {
                       </RoleBasedRoute>
                     }
                   />
-
                   <Route
                     path="/hr/documents"
                     element={
@@ -145,7 +136,6 @@ const App = () => {
                       </RoleBasedRoute>
                     }
                   />
-
                   <Route
                     path="/hr/templates"
                     element={
@@ -154,7 +144,8 @@ const App = () => {
                       </RoleBasedRoute>
                     }
                   />
-
+                  
+                  {/* Employee Management Routes - Organized */}
                   <Route
                     path="/hr/employees"
                     element={
@@ -163,7 +154,15 @@ const App = () => {
                       </RoleBasedRoute>
                     }
                   />
-
+                  <Route
+                    path="/hr/employees/list"
+                    element={
+                      <RoleBasedRoute allowedRoles={['hr', 'admin']}>
+                        <EmployeeList />
+                      </RoleBasedRoute>
+                    }
+                  />
+                  
                   <Route
                     path="/hr/analytics"
                     element={
@@ -172,7 +171,6 @@ const App = () => {
                       </RoleBasedRoute>
                     }
                   />
-
                   <Route
                     path="/hr/templates/create"
                     element={
@@ -181,8 +179,6 @@ const App = () => {
                       </RoleBasedRoute>
                     }
                   />
-
-                  {/* ✅ AI Assistant Route */}
                   <Route
                     path="/hr/ai-assistant"
                     element={
@@ -191,7 +187,6 @@ const App = () => {
                       </RoleBasedRoute>
                     }
                   />
-
                   <Route
                     path="/hr/notifications"
                     element={
@@ -202,7 +197,6 @@ const App = () => {
                   />
 
                   {/* Admin Routes */}
-
                   <Route
                     path="/admin/dashboard"
                     element={
@@ -211,7 +205,6 @@ const App = () => {
                       </RoleBasedRoute>
                     }
                   />
-
                   <Route
                     path="/admin/hr"
                     element={
@@ -220,7 +213,6 @@ const App = () => {
                       </RoleBasedRoute>
                     }
                   />
-
                   <Route
                     path="/admin/employees"
                     element={
@@ -229,7 +221,6 @@ const App = () => {
                       </RoleBasedRoute>
                     }
                   />
-
                   <Route
                     path="/admin/templates"
                     element={
@@ -238,7 +229,6 @@ const App = () => {
                       </RoleBasedRoute>
                     }
                   />
-
                   <Route
                     path="/admin/documents"
                     element={
@@ -247,7 +237,6 @@ const App = () => {
                       </RoleBasedRoute>
                     }
                   />
-
                   <Route
                     path="/admin/analytics"
                     element={
@@ -256,7 +245,6 @@ const App = () => {
                       </RoleBasedRoute>
                     }
                   />
-
                   <Route
                     path="/admin/settings"
                     element={
@@ -265,7 +253,6 @@ const App = () => {
                       </RoleBasedRoute>
                     }
                   />
-
                   <Route
                     path="/admin/notifications"
                     element={
@@ -275,16 +262,14 @@ const App = () => {
                     }
                   />
 
+                  {/* Redirects and Fallback Routes */}
                   <Route path="/dashboard" element={<Navigate to="/employee/dashboard" replace />} />
                   <Route path="/unauthorized" element={<Unauthorized />} />
                   <Route path="*" element={<NotFound />} />
-
                 </Route>
-
               </Routes>
 
               <ToastContainer position="top-right" autoClose={3000} />
-
             </div>
           </ThemeProvider>
         </NotificationProvider>

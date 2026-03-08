@@ -5,24 +5,41 @@ import * as Yup from 'yup';
 import api from '../../services/api';
 import { toast } from 'react-hot-toast';
 
+const TASK_THEMES = [
+  { bar: '#3b82f6', badge: { background: '#dbeafe', color: '#1d4ed8' }, border: '#bfdbfe' },
+  { bar: '#22c55e', badge: { background: '#dcfce7', color: '#15803d' }, border: '#bbf7d0' },
+  { bar: '#a855f7', badge: { background: '#f3e8ff', color: '#7e22ce' }, border: '#e9d5ff' },
+  { bar: '#f97316', badge: { background: '#ffedd5', color: '#c2410c' }, border: '#fed7aa' },
+];
+
+const INPUT_STYLE = {
+  width: '100%',
+  padding: '10px 14px',
+  border: '1.5px solid #e2e8f0',
+  borderRadius: 10,
+  background: '#fff',
+  fontSize: 13.5,
+  color: '#0f172a',
+  outline: 'none',
+  fontFamily: 'inherit',
+  boxSizing: 'border-box',
+  transition: 'border-color 0.15s, box-shadow 0.15s',
+};
+
 const TemplateForm = ({ template, onSubmit, onCancel }) => {
   const [tasks, setTasks] = useState(template?.tasks || []);
   const [departments, setDepartments] = useState([]);
   const [loadingDepartments, setLoadingDepartments] = useState(true);
 
-  // Fetch departments on component mount
-  useEffect(() => {
-    fetchDepartments();
-  }, []);
+  useEffect(() => { fetchDepartments(); }, []);
 
   const fetchDepartments = async () => {
     try {
       setLoadingDepartments(true);
       const response = await api.get('/departments');
-      const departmentsData = response.data?.data || response.data || [];
-      setDepartments(departmentsData);
-    } catch (error) {
-      console.error('Error fetching departments:', error);
+      setDepartments(response.data?.data || response.data || []);
+    } catch (err) {
+      console.error('Error fetching departments:', err);
       toast.error('Failed to load departments');
       setDepartments([]);
     } finally {
@@ -38,33 +55,18 @@ const TemplateForm = ({ template, onSubmit, onCancel }) => {
       estimated_completion_days: template?.estimated_completion_days || 7,
     },
     validationSchema: Yup.object({
-      name: Yup.string()
-        .min(2, 'Template name must be at least 2 characters')
-        .max(200, 'Template name must not exceed 200 characters')
-        .required('Template name is required'),
-      description: Yup.string()
-        .max(1000, 'Description must not exceed 1000 characters'),
-      department_id: Yup.string()
-        .test('is-uuid-or-empty', 'Invalid department', function(value) {
-          if (!value) return true; 
-          // Check if it's a valid UUID
-          const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-          return uuidRegex.test(value);
-        }),
-      estimated_completion_days: Yup.number()
-        .min(1, 'Must be at least 1 day')
-        .max(365, 'Cannot exceed 365 days')
-        .integer('Must be a whole number'),
+      name: Yup.string().min(2, 'At least 2 characters').max(200, 'Max 200 characters').required('Template name is required'),
+      description: Yup.string().max(1000, 'Max 1000 characters'),
+      department_id: Yup.string().test('is-uuid-or-empty', 'Invalid department', (value) => {
+        if (!value) return true;
+        return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+      }),
+      estimated_completion_days: Yup.number().min(1).max(365).integer('Must be a whole number'),
     }),
     onSubmit: (values) => {
-      // Clean and format the data
-      const cleanedData = cleanFormData(values, tasks);
-      
-      console.log('Submitting cleaned data:', cleanedData);
-      onSubmit(cleanedData);
+      onSubmit(cleanFormData(values, tasks));
     },
   });
-
 
   const cleanFormData = (values, tasksList) => {
     const cleaned = {
@@ -72,75 +74,39 @@ const TemplateForm = ({ template, onSubmit, onCancel }) => {
       description: values.description?.trim() || '',
       estimated_completion_days: values.estimated_completion_days,
     };
-
-    // Only include department_id if it's a valid UUID
     if (values.department_id) {
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (uuidRegex.test(values.department_id)) {
-        cleaned.department_id = values.department_id;
-      } else {
-        console.warn('⚠️ Invalid department_id removed:', values.department_id);
-      }
+      if (uuidRegex.test(values.department_id)) cleaned.department_id = values.department_id;
     }
-
-    // Format tasks
     if (tasksList && tasksList.length > 0) {
       cleaned.tasks = tasksList.map((task, index) => {
         const cleanedTask = {
           title: task.title?.trim(),
           task_type: task.type || task.task_type || 'read',
           order_index: index + 1,
-          is_required: task.isRequired !== undefined 
-            ? task.isRequired 
-            : task.is_required !== undefined 
-              ? task.is_required 
-              : true,
+          is_required: task.isRequired !== undefined ? task.isRequired : task.is_required !== undefined ? task.is_required : true,
         };
-
-        // Add optional fields only if they have values
-        if (task.description?.trim()) {
-          cleanedTask.description = task.description.trim();
-        }
-        
+        if (task.description?.trim()) cleanedTask.description = task.description.trim();
         const estimatedTime = task.estimatedTime || task.estimated_time;
-        if (estimatedTime) {
-          cleanedTask.estimated_time = estimatedTime;
-        }
-        
-        if (task.resource_url?.trim()) {
-          cleanedTask.resource_url = task.resource_url.trim();
-        }
-
+        if (estimatedTime) cleanedTask.estimated_time = estimatedTime;
+        if (task.resource_url?.trim()) cleanedTask.resource_url = task.resource_url.trim();
         return cleanedTask;
       });
     }
-
     return cleaned;
   };
 
   const addTask = () => {
-    const newTask = {
-      id: Date.now(),
-      title: '',
-      description: '',
-      type: 'read',
-      isRequired: true,
-      estimatedTime: 30,
-      order: tasks.length + 1,
-      resource_url: null,
-    };
-    setTasks([...tasks, newTask]);
+    setTasks([...tasks, { id: Date.now(), title: '', description: '', type: 'read', isRequired: true, estimatedTime: 30, order: tasks.length + 1, resource_url: null }]);
   };
 
   const updateTask = (index, field, value) => {
-    const updatedTasks = [...tasks];
-    updatedTasks[index] = { ...updatedTasks[index], [field]: value };
-    setTasks(updatedTasks);
+    const updated = [...tasks];
+    updated[index] = { ...updated[index], [field]: value };
+    setTasks(updated);
   };
 
-  const removeTask = (index) => {
-    setTasks(tasks.filter((_, i) => i !== index));
-  };
+  const removeTask = (index) => setTasks(tasks.filter((_, i) => i !== index));
 
   const moveTask = (index, direction) => {
     if (direction === 'up' && index > 0) {
@@ -154,251 +120,185 @@ const TemplateForm = ({ template, onSubmit, onCancel }) => {
     }
   };
 
-  const taskThemes = [
-    { bar: 'from-blue-500 to-indigo-600', border: 'border-blue-200', badge: 'bg-blue-100 text-blue-700' },
-    { bar: 'from-emerald-500 to-teal-600', border: 'border-emerald-200', badge: 'bg-emerald-100 text-emerald-700' },
-    { bar: 'from-purple-500 to-pink-600', border: 'border-purple-200', badge: 'bg-purple-100 text-purple-700' },
-    { bar: 'from-amber-500 to-orange-600', border: 'border-amber-200', badge: 'bg-amber-100 text-amber-700' },
-  ];
-
-  const inputClass = `mt-1 block w-full px-4 py-2.5 border border-gray-200 rounded-xl bg-white/70 shadow-sm
-    focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400
-    text-sm text-gray-800 placeholder-gray-400 transition-all duration-200`;
+  const focusStyle = (e) => { e.target.style.borderColor = '#6366f1'; e.target.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.10)'; };
+  const blurStyle = (e) => { e.target.style.borderColor = '#e2e8f0'; e.target.style.boxShadow = 'none'; };
 
   return (
-    <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-      <style>{`
-        @keyframes slideUp {
-          from { opacity: 0; transform: translateY(16px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        .form-slide { animation: slideUp 0.4s ease-out forwards; opacity: 0; }
-      `}</style>
+    <div style={{ background: '#fff', borderRadius: 20, border: '1px solid #e2e8f0', overflow: 'hidden', fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+      <style>{`@keyframes slideUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }`}</style>
 
-      {/* ─── HEADER ─── */}
-      <div className="relative">
-        <div className="h-1.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
-        <div className="px-6 py-5 bg-gradient-to-r from-indigo-50 to-purple-50 border-b border-gray-100">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-gray-900">
-              {template ? 'Edit Template' : 'Create New Template'}
-            </h2>
-            <button
-              onClick={onCancel}
-              className="p-2 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-white/60 transition-all duration-200"
-            >
-              <XMarkIcon className="h-5 w-5" />
-            </button>
-          </div>
-        </div>
+      <div style={{ height: 5, background: 'linear-gradient(90deg, #6366f1, #a855f7, #ec4899)' }} />
+
+      <div style={{ padding: '20px 24px', borderBottom: '1px solid #f1f5f9', background: 'linear-gradient(to right, #eef2ff, #faf5ff)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <h2 style={{ fontSize: 17, fontWeight: 800, color: '#0f172a', margin: 0 }}>
+          {template ? 'Edit Template' : 'Create New Template'}
+        </h2>
+        <button
+          onClick={onCancel}
+          style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', borderRadius: 8, color: '#94a3b8', cursor: 'pointer', transition: 'background 0.15s, color 0.15s' }}
+          onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#475569'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#94a3b8'; }}
+        >
+          <XMarkIcon style={{ width: 18, height: 18 }} />
+        </button>
       </div>
 
-      {/* ─── FORM BODY ─── */}
-      <form onSubmit={formik.handleSubmit} className="p-6 space-y-6">
+      <form onSubmit={formik.handleSubmit} style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-        {/* Row 1: Name + Department */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 form-slide" style={{ animationDelay: '60ms' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, animation: 'slideUp 0.4s ease-out 60ms both' }}>
           <div>
-            <label htmlFor="name" className="block text-sm font-semibold text-gray-700 mb-0.5">
-              Template Name <span className="text-indigo-500">*</span>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 6, letterSpacing: '0.03em' }}>
+              TEMPLATE NAME <span style={{ color: '#6366f1' }}>*</span>
             </label>
             <input
-              type="text"
-              id="name"
-              name="name"
-              className={inputClass}
+              type="text" id="name" name="name"
+              style={{ ...INPUT_STYLE, borderColor: formik.touched.name && formik.errors.name ? '#ef4444' : '#e2e8f0' }}
               placeholder="e.g. Software Engineer Onboarding"
-              onChange={formik.handleChange}
-              onBlur={formik.handleBlur}
+              onChange={formik.handleChange} onBlur={formik.handleBlur}
               value={formik.values.name}
+              onFocus={focusStyle}
             />
             {formik.touched.name && formik.errors.name && (
-              <p className="mt-1.5 text-xs text-red-500 font-medium">{formik.errors.name}</p>
+              <p style={{ fontSize: 12, color: '#ef4444', marginTop: 4, margin: '4px 0 0' }}>⚠ {formik.errors.name}</p>
             )}
           </div>
 
           <div>
-            <label htmlFor="department_id" className="block text-sm font-semibold text-gray-700 mb-0.5">
-              Department <span className="text-gray-400 text-xs">(Optional)</span>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 6, letterSpacing: '0.03em' }}>
+              DEPARTMENT <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 500 }}>Optional</span>
             </label>
             {loadingDepartments ? (
-              <div className={inputClass + ' flex items-center justify-center'}>
-                <div className="animate-spin rounded-full h-4 w-4 border-2 border-indigo-500 border-t-transparent"></div>
-                <span className="ml-2 text-gray-500">Loading...</span>
+              <div style={{ ...INPUT_STYLE, display: 'flex', alignItems: 'center', gap: 8, color: '#94a3b8' }}>
+                <div style={{ width: 14, height: 14, border: '2px solid #6366f1', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite', flexShrink: 0 }} />
+                Loading...
               </div>
             ) : (
               <select
-                id="department_id"
-                name="department_id"
-                className={inputClass}
-                onChange={formik.handleChange}
-                onBlur={formik.handleBlur}
+                id="department_id" name="department_id"
+                style={{ ...INPUT_STYLE }}
+                onChange={formik.handleChange} onBlur={formik.handleBlur}
                 value={formik.values.department_id}
+                onFocus={focusStyle}
               >
                 <option value="">No Department</option>
-                {departments.map(dept => (
-                  <option key={dept.id} value={dept.id}>
-                    {dept.name}
-                  </option>
-                ))}
-                
-                {/* Fallback options if departments API fails */}
-                {departments.length === 0 && !loadingDepartments && (
-                  <>
-                    <option disabled>── Departments unavailable ──</option>
-                    <option value="">Continue without department</option>
-                  </>
-                )}
+                {departments.map(dept => <option key={dept.id} value={dept.id}>{dept.name}</option>)}
+                {departments.length === 0 && <option disabled>── Departments unavailable ──</option>}
               </select>
             )}
-            {formik.touched.department_id && formik.errors.department_id && (
-              <p className="mt-1.5 text-xs text-red-500 font-medium">{formik.errors.department_id}</p>
-            )}
-            <p className="mt-1 text-xs text-gray-400">
-              Department selection is optional
-            </p>
+            <p style={{ fontSize: 11.5, color: '#94a3b8', marginTop: 4 }}>Department selection is optional</p>
           </div>
         </div>
 
-        {/* Row 2: Description */}
-        <div className="form-slide" style={{ animationDelay: '120ms' }}>
-          <label htmlFor="description" className="block text-sm font-semibold text-gray-700 mb-0.5">
-            Description <span className="text-gray-400 text-xs">(Optional)</span>
+        <div style={{ animation: 'slideUp 0.4s ease-out 120ms both' }}>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 6, letterSpacing: '0.03em' }}>
+            DESCRIPTION <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 500 }}>Optional</span>
           </label>
           <textarea
-            id="description"
-            name="description"
-            rows={3}
-            className={inputClass}
+            id="description" name="description" rows={3}
+            style={{ ...INPUT_STYLE, resize: 'vertical' }}
             placeholder="Describe the purpose and scope of this template..."
             onChange={formik.handleChange}
-            onBlur={formik.handleBlur}
             value={formik.values.description}
+            onFocus={focusStyle}
+            onBlur={e => { blurStyle(e); formik.handleBlur(e); }}
           />
           {formik.touched.description && formik.errors.description && (
-            <p className="mt-1.5 text-xs text-red-500 font-medium">{formik.errors.description}</p>
+            <p style={{ fontSize: 12, color: '#ef4444', margin: '4px 0 0' }}>⚠ {formik.errors.description}</p>
           )}
         </div>
 
-        {/* Row 3: Estimated Days */}
-        <div className="form-slide" style={{ animationDelay: '180ms' }}>
-          <label htmlFor="estimated_completion_days" className="block text-sm font-semibold text-gray-700 mb-0.5">
-            Estimated Completion (Days) <span className="text-gray-400 text-xs">(Optional)</span>
+        <div style={{ animation: 'slideUp 0.4s ease-out 180ms both' }}>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 6, letterSpacing: '0.03em' }}>
+            ESTIMATED COMPLETION <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 500 }}>Optional</span>
           </label>
-          <div className="flex items-center gap-3">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <input
-              type="number"
-              id="estimated_completion_days"
-              name="estimated_completion_days"
-              min="1"
-              max="365"
-              className={`${inputClass} w-32`}
-              onChange={formik.handleChange}
-              onBlur={formik.handleBlur}
+              type="number" id="estimated_completion_days" name="estimated_completion_days"
+              min="1" max="365"
+              style={{ ...INPUT_STYLE, width: 110 }}
+              onChange={formik.handleChange} onBlur={formik.handleBlur}
               value={formik.values.estimated_completion_days}
+              onFocus={focusStyle}
             />
-            <span className="text-sm text-gray-400">days to complete</span>
+            <span style={{ fontSize: 13, color: '#94a3b8' }}>days to complete</span>
           </div>
           {formik.touched.estimated_completion_days && formik.errors.estimated_completion_days && (
-            <p className="mt-1.5 text-xs text-red-500 font-medium">{formik.errors.estimated_completion_days}</p>
+            <p style={{ fontSize: 12, color: '#ef4444', margin: '4px 0 0' }}>⚠ {formik.errors.estimated_completion_days}</p>
           )}
         </div>
 
-        {/* ─── TASKS SECTION ─── */}
-        <div className="border-t border-gray-100 pt-6 form-slide" style={{ animationDelay: '240ms' }}>
-          <div className="flex items-center justify-between mb-5">
+        <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 20, animation: 'slideUp 0.4s ease-out 240ms both' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
             <div>
-              <h3 className="text-lg font-bold text-gray-900">Tasks</h3>
-              <p className="text-sm text-gray-500 mt-0.5">{tasks.length} task{tasks.length !== 1 ? 's' : ''} added</p>
+              <h3 style={{ fontSize: 15, fontWeight: 800, color: '#0f172a', margin: '0 0 2px' }}>Tasks</h3>
+              <p style={{ fontSize: 12.5, color: '#94a3b8', margin: 0 }}>{tasks.length} task{tasks.length !== 1 ? 's' : ''} added</p>
             </div>
             <button
-              type="button"
-              onClick={addTask}
-              className="group inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white text-sm font-semibold rounded-xl shadow-sm hover:shadow-md transition-all duration-300 hover:from-indigo-600 hover:to-purple-700"
+              type="button" onClick={addTask}
+              style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 18px', background: '#6366f1', border: 'none', color: '#fff', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(99,102,241,0.3)', transition: 'background 0.15s' }}
+              onMouseEnter={e => e.currentTarget.style.background = '#4f46e5'}
+              onMouseLeave={e => e.currentTarget.style.background = '#6366f1'}
             >
-              <PlusIcon className="h-4 w-4 group-hover:rotate-90 transition-transform duration-300" />
+              <PlusIcon style={{ width: 15, height: 15 }} />
               Add Task
             </button>
           </div>
 
-          {/* Empty tasks */}
           {tasks.length === 0 ? (
-            <div className="border-2 border-dashed border-gray-200 rounded-2xl py-10 px-6 text-center bg-white/40">
-              <PlusIcon className="h-10 w-10 text-gray-300 mx-auto mb-2" />
-              <p className="text-sm text-gray-500 font-medium">No tasks added yet</p>
-              <p className="text-xs text-gray-400 mt-0.5">Click "Add Task" above to get started</p>
+            <div style={{ border: '2px dashed #e2e8f0', borderRadius: 16, padding: '40px 24px', textAlign: 'center', background: '#fafafa' }}>
+              <PlusIcon style={{ width: 36, height: 36, color: '#cbd5e1', margin: '0 auto 8px' }} />
+              <p style={{ fontSize: 13.5, fontWeight: 600, color: '#94a3b8', margin: '0 0 2px' }}>No tasks added yet</p>
+              <p style={{ fontSize: 12.5, color: '#cbd5e1', margin: 0 }}>Click "Add Task" above to get started</p>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               {tasks.map((task, index) => {
-                const theme = taskThemes[index % taskThemes.length];
+                const theme = TASK_THEMES[index % TASK_THEMES.length];
                 const taskType = task.type || task.task_type || 'read';
-                
                 return (
-                  <div
-                    key={task.id}
-                    className={`rounded-2xl border ${theme.border} overflow-hidden bg-white/60 backdrop-blur-sm shadow-sm`}
-                  >
-                    <div className={`h-1 bg-gradient-to-r ${theme.bar}`}></div>
+                  <div key={task.id} style={{ borderRadius: 16, border: `1.5px solid ${theme.border}`, overflow: 'hidden', background: '#fff' }}>
+                    <div style={{ height: 4, background: theme.bar }} />
 
-                    <div className="p-4">
-                      {/* Task header */}
-                      <div className="flex justify-between items-center mb-4">
-                        <div className="flex items-center gap-2">
-                          <span className={`px-2.5 py-0.5 text-xs font-bold rounded-lg ${theme.badge}`}>
+                    <div style={{ padding: 16 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: 8, background: theme.badge.background, color: theme.badge.color }}>
                             Task {index + 1}
                           </span>
-                          <div className="flex items-center gap-0.5 ml-1">
-                            <button
-                              type="button"
-                              onClick={() => moveTask(index, 'up')}
-                              disabled={index === 0}
-                              className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-150"
-                            >
-                              <ChevronUpIcon className="h-4 w-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => moveTask(index, 'down')}
-                              disabled={index === tasks.length - 1}
-                              className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-150"
-                            >
-                              <ChevronDownIcon className="h-4 w-4" />
-                            </button>
+                          <div style={{ display: 'flex', gap: 2 }}>
+                            {[
+                              { dir: 'up', disabled: index === 0, icon: <ChevronUpIcon style={{ width: 14, height: 14 }} /> },
+                              { dir: 'down', disabled: index === tasks.length - 1, icon: <ChevronDownIcon style={{ width: 14, height: 14 }} /> },
+                            ].map(btn => (
+                              <button
+                                key={btn.dir} type="button"
+                                onClick={() => moveTask(index, btn.dir)}
+                                disabled={btn.disabled}
+                                style={{ width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', borderRadius: 6, color: btn.disabled ? '#e2e8f0' : '#94a3b8', cursor: btn.disabled ? 'not-allowed' : 'pointer' }}
+                              >
+                                {btn.icon}
+                              </button>
+                            ))}
                           </div>
                         </div>
                         <button
-                          type="button"
-                          onClick={() => removeTask(index)}
-                          className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-all duration-200"
+                          type="button" onClick={() => removeTask(index)}
+                          style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', borderRadius: 8, color: '#94a3b8', cursor: 'pointer', transition: 'background 0.15s, color 0.15s' }}
+                          onMouseEnter={e => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.color = '#ef4444'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#94a3b8'; }}
                         >
-                          <TrashIcon className="h-4 w-4" />
+                          <TrashIcon style={{ width: 14, height: 14 }} />
                         </button>
                       </div>
 
-                      {/* Title + Type */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                         <div>
-                          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
-                            Title <span className="text-red-500">*</span>
-                          </label>
-                          <input
-                            type="text"
-                            value={task.title}
-                            onChange={(e) => updateTask(index, 'title', e.target.value)}
-                            className={inputClass}
-                            placeholder="Enter task title"
-                          />
+                          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', marginBottom: 5, letterSpacing: '0.05em' }}>TITLE *</label>
+                          <input type="text" value={task.title} onChange={e => updateTask(index, 'title', e.target.value)} style={{ ...INPUT_STYLE }} placeholder="Enter task title" onFocus={focusStyle} onBlur={blurStyle} />
                         </div>
                         <div>
-                          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
-                            Type <span className="text-red-500">*</span>
-                          </label>
-                          <select
-                            value={taskType}
-                            onChange={(e) => updateTask(index, 'type', e.target.value)}
-                            className={inputClass}
-                          >
+                          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', marginBottom: 5, letterSpacing: '0.05em' }}>TYPE *</label>
+                          <select value={taskType} onChange={e => updateTask(index, 'type', e.target.value)} style={{ ...INPUT_STYLE }} onFocus={focusStyle} onBlur={blurStyle}>
                             <option value="read">Read Document</option>
                             <option value="upload">Upload File</option>
                             <option value="watch">Watch Video</option>
@@ -409,82 +309,57 @@ const TemplateForm = ({ template, onSubmit, onCancel }) => {
                         </div>
                       </div>
 
-                      {/* Description */}
-                      <div className="mt-4">
-                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Description</label>
-                        <textarea
-                          value={task.description}
-                          onChange={(e) => updateTask(index, 'description', e.target.value)}
-                          rows={2}
-                          className={inputClass}
-                          placeholder="Describe what needs to be done"
-                        />
+                      <div style={{ marginTop: 12 }}>
+                        <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', marginBottom: 5, letterSpacing: '0.05em' }}>DESCRIPTION</label>
+                        <textarea value={task.description} onChange={e => updateTask(index, 'description', e.target.value)} rows={2} style={{ ...INPUT_STYLE, resize: 'vertical' }} placeholder="Describe what needs to be done" onFocus={focusStyle} onBlur={blurStyle} />
                       </div>
 
-                      {/* Resource URL for read/watch tasks */}
                       {(taskType === 'read' || taskType === 'watch') && (
-                        <div className="mt-4">
-                          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Resource URL</label>
-                          <input
-                            type="url"
-                            value={task.resource_url || ''}
-                            onChange={(e) => updateTask(index, 'resource_url', e.target.value)}
-                            className={inputClass}
-                            placeholder="https://example.com/document.pdf"
-                          />
+                        <div style={{ marginTop: 12 }}>
+                          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', marginBottom: 5, letterSpacing: '0.05em' }}>RESOURCE URL</label>
+                          <input type="url" value={task.resource_url || ''} onChange={e => updateTask(index, 'resource_url', e.target.value)} style={{ ...INPUT_STYLE }} placeholder="https://example.com/document.pdf" onFocus={focusStyle} onBlur={blurStyle} />
                         </div>
                       )}
 
-                      {/* Upload task info */}
                       {taskType === 'upload' && (
-                        <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-xl">
-                          <div className="flex items-start gap-2">
-                            <DocumentArrowUpIcon className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                            <div>
-                              <p className="text-sm font-semibold text-blue-900">File Upload Task</p>
-                              <p className="text-xs text-blue-700 mt-1">
-                                Employees will be able to upload documents for this task. Specify required documents in the description.
-                              </p>
-                            </div>
+                        <div style={{ marginTop: 12, padding: '12px 14px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                          <DocumentArrowUpIcon style={{ width: 18, height: 18, color: '#3b82f6', flexShrink: 0, marginTop: 1 }} />
+                          <div>
+                            <p style={{ fontSize: 13, fontWeight: 700, color: '#1e40af', margin: '0 0 2px' }}>File Upload Task</p>
+                            <p style={{ fontSize: 12, color: '#3b82f6', margin: 0 }}>Employees will upload documents. Specify required files in the description.</p>
                           </div>
                         </div>
                       )}
 
-                      {/* Form task info */}
                       {taskType === 'form' && (
-                        <div className="mt-4 p-3 bg-purple-50 border border-purple-200 rounded-xl">
-                          <div className="flex items-start gap-2">
-                            <DocumentArrowUpIcon className="h-5 w-5 text-purple-600 flex-shrink-0 mt-0.5" />
-                            <div>
-                              <p className="text-sm font-semibold text-purple-900">Form Completion Task</p>
-                              <p className="text-xs text-purple-700 mt-1">
-                                Employees will complete a form. Data will be saved to their user profile.
-                              </p>
-                            </div>
+                        <div style={{ marginTop: 12, padding: '12px 14px', background: '#faf5ff', border: '1px solid #e9d5ff', borderRadius: 10, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                          <DocumentArrowUpIcon style={{ width: 18, height: 18, color: '#a855f7', flexShrink: 0, marginTop: 1 }} />
+                          <div>
+                            <p style={{ fontSize: 13, fontWeight: 700, color: '#6b21a8', margin: '0 0 2px' }}>Form Completion Task</p>
+                            <p style={{ fontSize: 12, color: '#a855f7', margin: 0 }}>Employees will complete a form. Data will be saved to their profile.</p>
                           </div>
                         </div>
                       )}
 
-                      {/* Required + Est. Time */}
-                      <div className="mt-4 flex flex-wrap items-end gap-5">
-                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 20, marginTop: 14 }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer' }}>
                           <input
                             type="checkbox"
                             checked={task.isRequired !== undefined ? task.isRequired : task.is_required !== undefined ? task.is_required : true}
-                            onChange={(e) => updateTask(index, 'isRequired', e.target.checked)}
-                            className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-300 cursor-pointer"
+                            onChange={e => updateTask(index, 'isRequired', e.target.checked)}
+                            style={{ width: 15, height: 15, accentColor: '#6366f1', cursor: 'pointer' }}
                           />
-                          <span className="text-sm text-gray-700 font-medium">Required</span>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Required</span>
                         </label>
-
                         <div>
-                          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Est. Time (min)</label>
+                          <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', marginBottom: 5, letterSpacing: '0.05em' }}>EST. TIME (MIN)</label>
                           <input
                             type="number"
                             value={task.estimatedTime || task.estimated_time || 30}
-                            onChange={(e) => updateTask(index, 'estimatedTime', parseInt(e.target.value) || 0)}
+                            onChange={e => updateTask(index, 'estimatedTime', parseInt(e.target.value) || 0)}
                             min="1"
-                            className={`${inputClass} w-28`}
+                            style={{ ...INPUT_STYLE, width: 100 }}
+                            onFocus={focusStyle} onBlur={blurStyle}
                           />
                         </div>
                       </div>
@@ -496,19 +371,20 @@ const TemplateForm = ({ template, onSubmit, onCancel }) => {
           )}
         </div>
 
-        {/* ─── FOOTER BUTTONS ─── */}
-        <div className="flex justify-end gap-3 pt-6 border-t border-gray-100 form-slide" style={{ animationDelay: '300ms' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, paddingTop: 16, borderTop: '1px solid #f1f5f9', animation: 'slideUp 0.4s ease-out 300ms both' }}>
           <button
-            type="button"
-            onClick={onCancel}
-            className="px-5 py-2.5 text-sm font-semibold text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all duration-200 shadow-sm"
+            type="button" onClick={onCancel}
+            style={{ padding: '10px 22px', fontSize: 13.5, fontWeight: 700, color: '#475569', background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit', transition: 'background 0.15s' }}
+            onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+            onMouseLeave={e => e.currentTarget.style.background = '#fff'}
           >
             Cancel
           </button>
           <button
-            type="submit"
-            disabled={formik.isSubmitting}
-            className="px-5 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl shadow-sm hover:shadow-md transition-all duration-300 hover:from-indigo-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            type="submit" disabled={formik.isSubmitting}
+            style={{ padding: '10px 22px', fontSize: 13.5, fontWeight: 700, color: '#fff', background: '#6366f1', border: 'none', borderRadius: 10, cursor: formik.isSubmitting ? 'not-allowed' : 'pointer', fontFamily: 'inherit', opacity: formik.isSubmitting ? 0.6 : 1, boxShadow: '0 4px 14px rgba(99,102,241,0.3)', transition: 'background 0.15s' }}
+            onMouseEnter={e => { if (!formik.isSubmitting) e.currentTarget.style.background = '#4f46e5'; }}
+            onMouseLeave={e => e.currentTarget.style.background = '#6366f1'}
           >
             {formik.isSubmitting ? 'Saving...' : template ? 'Update Template' : 'Create Template'}
           </button>

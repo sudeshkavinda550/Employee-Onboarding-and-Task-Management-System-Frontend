@@ -1,46 +1,37 @@
 import React from 'react';
 import { PencilIcon, TrashIcon, DocumentDuplicateIcon, EyeIcon } from '@heroicons/react/24/outline';
 
-const TemplateList = ({ 
-  templates = [], 
-  onEdit, 
-  onDelete, 
-  onDuplicate, 
-  onPreview,
-  onAssign,
-  isLoading 
-}) => {
+const CARD_COLORS = [
+  { bar: '#3b82f6', badge: { background: '#dbeafe', color: '#1d4ed8' }, assign: '#3b82f6' },
+  { bar: '#f97316', badge: { background: '#ffedd5', color: '#c2410c' }, assign: '#f97316' },
+  { bar: '#22d3ee', badge: { background: '#cffafe', color: '#0e7490' }, assign: '#22d3ee' },
+  { bar: '#22c55e', badge: { background: '#dcfce7', color: '#15803d' }, assign: '#22c55e' },
+  { bar: '#a855f7', badge: { background: '#f3e8ff', color: '#7e22ce' }, assign: '#a855f7' },
+  { bar: '#ef4444', badge: { background: '#fee2e2', color: '#b91c1c' }, assign: '#ef4444' },
+];
 
-  const cardThemes = [
-    { gradient: 'from-blue-500 to-indigo-600', iconBg: 'bg-blue-100', iconColor: 'text-blue-600', accent: 'border-blue-200 bg-blue-50 text-blue-700', accentHover: 'hover:bg-blue-100', deptBg: 'bg-blue-100 text-blue-700' },
-    { gradient: 'from-emerald-500 to-teal-600', iconBg: 'bg-emerald-100', iconColor: 'text-emerald-600', accent: 'border-emerald-200 bg-emerald-50 text-emerald-700', accentHover: 'hover:bg-emerald-100', deptBg: 'bg-emerald-100 text-emerald-700' },
-    { gradient: 'from-purple-500 to-pink-600', iconBg: 'bg-purple-100', iconColor: 'text-purple-600', accent: 'border-purple-200 bg-purple-50 text-purple-700', accentHover: 'hover:bg-purple-100', deptBg: 'bg-purple-100 text-purple-700' },
-    { gradient: 'from-amber-500 to-orange-600', iconBg: 'bg-amber-100', iconColor: 'text-amber-600', accent: 'border-amber-200 bg-amber-50 text-amber-700', accentHover: 'hover:bg-amber-100', deptBg: 'bg-amber-100 text-amber-700' },
-  ];
+const TemplateList = ({ templates = [], onEdit, onDelete, onDuplicate, onPreview, onAssign, isLoading }) => {
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="bg-white/80 backdrop-blur-sm rounded-2xl border border-gray-100 overflow-hidden animate-pulse">
-            <div className="h-2 bg-gray-200"></div>
-            <div className="p-6">
-              <div className="flex items-start gap-3 mb-5">
-                <div className="h-11 w-11 rounded-xl bg-gray-200"></div>
-                <div className="flex-1">
-                  <div className="h-4 bg-gray-200 rounded-lg w-3/4 mb-2"></div>
-                  <div className="h-3 bg-gray-200 rounded-lg w-full"></div>
-                  <div className="h-3 bg-gray-200 rounded-lg w-2/3 mt-1.5"></div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+        {[1, 2, 3].map(i => (
+          <div key={i} style={{ background: '#fff', borderRadius: 20, overflow: 'hidden', border: '1px solid #e2e8f0' }}>
+            <div style={{ height: 6, background: '#e2e8f0' }} />
+            <div style={{ padding: 22 }}>
+              <div style={{ display: 'flex', gap: 12, marginBottom: 18 }}>
+                <div style={{ width: 44, height: 44, background: '#f1f5f9', borderRadius: 12, flexShrink: 0 }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ height: 14, background: '#f1f5f9', borderRadius: 6, marginBottom: 8, width: '70%' }} />
+                  <div style={{ height: 12, background: '#f1f5f9', borderRadius: 6, width: '90%' }} />
                 </div>
               </div>
-              <div className="flex gap-2">
-                <div className="h-6 bg-gray-200 rounded-lg w-20"></div>
-                <div className="h-6 bg-gray-200 rounded-lg w-28"></div>
-                <div className="h-6 bg-gray-200 rounded-lg w-24"></div>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 18 }}>
+                {[60, 90, 80].map((w, j) => <div key={j} style={{ height: 24, background: '#f1f5f9', borderRadius: 8, width: w }} />)}
               </div>
-              <div className="flex gap-3 mt-5">
-                <div className="flex-1 h-9 bg-gray-200 rounded-xl"></div>
-                <div className="flex-1 h-9 bg-gray-200 rounded-xl"></div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <div style={{ flex: 1, height: 36, background: '#f1f5f9', borderRadius: 10 }} />
+                <div style={{ flex: 1, height: 36, background: '#f1f5f9', borderRadius: 10 }} />
               </div>
             </div>
           </div>
@@ -51,12 +42,12 @@ const TemplateList = ({
 
   if (!templates || templates.length === 0) {
     return (
-      <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm border border-gray-100 px-6 py-16 text-center">
-        <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center mx-auto mb-4">
-          <DocumentDuplicateIcon className="h-8 w-8 text-indigo-500" />
+      <div style={{ background: '#fff', borderRadius: 20, border: '1px solid #e2e8f0', padding: '64px 24px', textAlign: 'center' }}>
+        <div style={{ width: 64, height: 64, background: 'linear-gradient(135deg, #eef2ff, #f5f3ff)', borderRadius: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+          <DocumentDuplicateIcon style={{ width: 30, height: 30, color: '#6366f1' }} />
         </div>
-        <h3 className="text-lg font-bold text-gray-900">No templates yet</h3>
-        <p className="mt-1 text-sm text-gray-500 max-w-sm mx-auto">
+        <h3 style={{ fontSize: 16, fontWeight: 800, color: '#0f172a', margin: '0 0 6px' }}>No templates yet</h3>
+        <p style={{ fontSize: 13.5, color: '#64748b', margin: 0, maxWidth: 320, marginLeft: 'auto', marginRight: 'auto' }}>
           Get started by creating your first onboarding template to streamline the new-hire process.
         </p>
       </div>
@@ -64,78 +55,89 @@ const TemplateList = ({
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
       {templates.map((template, index) => {
-        const theme = cardThemes[index % cardThemes.length];
+        const theme = CARD_COLORS[index % CARD_COLORS.length];
         return (
           <div
             key={template.id}
-            className="group bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
+            style={{
+              background: '#fff',
+              borderRadius: 20,
+              border: '1px solid #e2e8f0',
+              overflow: 'hidden',
+              transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+              animation: `slideUp 0.5s ease-out ${index * 50}ms both`,
+            }}
+            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 12px 32px rgba(0,0,0,0.1)'; }}
+            onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
           >
-            <div className={`h-2 bg-gradient-to-r ${theme.gradient}`}></div>
+            <div style={{ height: 6, background: theme.bar }} />
 
-            <div className="p-6">
-              <div className="flex justify-between items-start">
-                <div className="flex items-start gap-3 flex-1 min-w-0 pr-3">
-                  <div className={`flex-shrink-0 h-11 w-11 rounded-xl ${theme.iconBg} flex items-center justify-center`}>
-                    <DocumentDuplicateIcon className={`h-5 w-5 ${theme.iconColor}`} />
+            <div style={{ padding: 22 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div style={{ display: 'flex', gap: 12, flex: 1, minWidth: 0, paddingRight: 12 }}>
+                  <div style={{ width: 44, height: 44, borderRadius: 12, background: theme.badge.background, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <DocumentDuplicateIcon style={{ width: 20, height: 20, color: theme.badge.color }} />
                   </div>
-                  <div className="min-w-0">
-                    <h3 className="text-base font-bold text-gray-900 truncate">{template.name}</h3>
-                    <p className="mt-0.5 text-sm text-gray-500 line-clamp-2">{template.description}</p>
+                  <div style={{ minWidth: 0 }}>
+                    <h3 style={{ fontSize: 14.5, fontWeight: 800, color: '#0f172a', margin: '0 0 4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {template.name}
+                    </h3>
+                    <p style={{ fontSize: 12.5, color: '#94a3b8', margin: 0, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                      {template.description}
+                    </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                  <button
-                    onClick={() => onEdit(template)}
-                    className="p-2 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all duration-150 hover:scale-110"
-                    title="Edit"
-                  >
-                    <PencilIcon className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => onDuplicate(template)}
-                    className="p-2 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 transition-all duration-150 hover:scale-110"
-                    title="Duplicate"
-                  >
-                    <DocumentDuplicateIcon className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => onDelete(template.id)}
-                    className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-all duration-150 hover:scale-110"
-                    title="Delete"
-                  >
-                    <TrashIcon className="h-4 w-4" />
-                  </button>
+                <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
+                  {[
+                    { fn: () => onEdit(template), icon: <PencilIcon style={{ width: 14, height: 14 }} />, hoverBg: '#eef2ff', hoverColor: '#6366f1' },
+                    { fn: () => onDuplicate(template), icon: <DocumentDuplicateIcon style={{ width: 14, height: 14 }} />, hoverBg: '#f0fdf4', hoverColor: '#16a34a' },
+                    { fn: () => onDelete(template.id), icon: <TrashIcon style={{ width: 14, height: 14 }} />, hoverBg: '#fef2f2', hoverColor: '#ef4444' },
+                  ].map((btn, i) => (
+                    <button
+                      key={i}
+                      onClick={btn.fn}
+                      style={{ width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', borderRadius: 8, color: '#94a3b8', cursor: 'pointer', transition: 'background 0.15s, color 0.15s' }}
+                      onMouseEnter={e => { e.currentTarget.style.background = btn.hoverBg; e.currentTarget.style.color = btn.hoverColor; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#94a3b8'; }}
+                    >
+                      {btn.icon}
+                    </button>
+                  ))}
                 </div>
               </div>
 
-              <div className="mt-5 flex flex-wrap gap-2">
-                <span className={`inline-flex items-center px-3 py-1 text-xs font-semibold rounded-lg border ${theme.accent}`}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 16 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 8, border: `1px solid ${theme.bar}33`, background: theme.badge.background, color: theme.badge.color }}>
                   {template.tasks_count || template.tasksCount || 0} Tasks
                 </span>
                 {template.department_name && (
-                  <span className={`inline-flex items-center px-3 py-1 text-xs font-semibold rounded-lg ${theme.deptBg}`}>
+                  <span style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 8, background: '#f1f5f9', color: '#475569' }}>
                     {template.department_name}
                   </span>
                 )}
-                <span className="inline-flex items-center px-3 py-1 text-xs font-semibold rounded-lg border border-gray-200 bg-gray-50 text-gray-600">
-                  Created {new Date(template.created_at || template.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                <span style={{ fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 8, background: '#f8fafc', color: '#94a3b8', border: '1px solid #e2e8f0' }}>
+                  {new Date(template.created_at || template.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                 </span>
               </div>
 
-              <div className="mt-5 flex gap-3">
+              <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
                 <button
                   onClick={() => onPreview(template)}
-                  className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-semibold rounded-xl border ${theme.accent} ${theme.accentHover} transition-all duration-200`}
+                  style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '9px', fontSize: 12.5, fontWeight: 700, borderRadius: 10, border: `1.5px solid ${theme.bar}44`, background: theme.badge.background, color: theme.badge.color, cursor: 'pointer', transition: 'opacity 0.15s' }}
+                  onMouseEnter={e => e.currentTarget.style.opacity = '0.8'}
+                  onMouseLeave={e => e.currentTarget.style.opacity = '1'}
                 >
-                  <EyeIcon className="h-4 w-4" />
+                  <EyeIcon style={{ width: 14, height: 14 }} />
                   Preview
                 </button>
                 <button
                   onClick={() => onAssign(template)}
-                  className={`flex-1 flex items-center justify-center px-3 py-2 text-sm font-semibold text-white bg-gradient-to-r ${theme.gradient} rounded-xl shadow-sm hover:shadow-md transition-all duration-200`}
+                  style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '9px', fontSize: 12.5, fontWeight: 700, borderRadius: 10, border: 'none', background: theme.bar, color: '#fff', cursor: 'pointer', boxShadow: `0 4px 12px ${theme.bar}44`, transition: 'opacity 0.15s' }}
+                  onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
+                  onMouseLeave={e => e.currentTarget.style.opacity = '1'}
                 >
                   Assign
                 </button>

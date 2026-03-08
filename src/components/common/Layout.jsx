@@ -22,6 +22,7 @@ const Layout = () => {
     '/hr/templates',
     '/hr/templates/create',
     '/hr/employees',
+    '/hr/employees/list',
     '/hr/analytics',
     '/hr/AIAssistant',
     '/admin/dashboard',

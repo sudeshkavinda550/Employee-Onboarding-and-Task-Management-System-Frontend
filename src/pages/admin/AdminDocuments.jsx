@@ -1,27 +1,44 @@
 import React, { useState, useEffect } from 'react';
 import {
-  MagnifyingGlassIcon,
-  ArrowDownTrayIcon,
-  DocumentIcon,
-  PhotoIcon,
+  MagnifyingGlassIcon, ArrowDownTrayIcon,
+  DocumentIcon, PhotoIcon, DocumentTextIcon,
 } from '@heroicons/react/24/outline';
 import { adminApi } from '../../services/api';
+
+const SHARED = `
+  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+  @keyframes slideUp{from{opacity:0;transform:translateY(18px);}to{opacity:1;transform:translateY(0);}}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .doc-card{transition:transform 0.2s,box-shadow 0.2s;}
+  .doc-card:hover{transform:translateY(-4px);box-shadow:0 12px 32px rgba(0,0,0,0.10) !important;}
+`;
+
+const CARD_COLORS = ['#3b82f6','#f97316','#22d3ee','#22c55e','#a855f7','#ef4444'];
 const STATUS_STYLES = {
-  approved: { cls: 'bg-emerald-100 text-emerald-700', label: 'Approved' },
-  pending:  { cls: 'bg-amber-100   text-amber-700',   label: 'Pending'  },
-  rejected: { cls: 'bg-red-100     text-red-600',     label: 'Rejected' },
+  approved:{ bg:'#dcfce7', color:'#15803d', label:'Approved' },
+  pending: { bg:'#fef9c3', color:'#a16207', label:'Pending'  },
+  rejected:{ bg:'#fee2e2', color:'#dc2626', label:'Rejected' },
 };
 
-const FileIcon = ({ filename = '' }) => {
-  const ext = filename.split('.').pop().toLowerCase();
-  return ['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)
-    ? <PhotoIcon   className="h-7 w-7 text-blue-400" />
-    : <DocumentIcon className="h-7 w-7 text-purple-400" />;
+const FileIcon = ({ filename='' }) => {
+  const ext=(filename.split('.').pop()||'').toLowerCase();
+  return ['png','jpg','jpeg','gif','webp'].includes(ext)
+    ? <PhotoIcon    style={{ width:26, height:26, color:'#3b82f6' }} />
+    : <DocumentIcon style={{ width:26, height:26, color:'#a855f7' }} />;
 };
+
+const StatCard = ({ label, value, color, Icon }) => (
+  <div style={{ background:color, borderRadius:20, padding:'20px 22px', color:'#fff', boxShadow:`0 4px 18px ${color}55`, position:'relative', overflow:'hidden' }}>
+    {Icon && <div style={{ position:'absolute', right:-8, bottom:-8, opacity:0.12 }}><Icon style={{ width:74, height:74 }} /></div>}
+    <p style={{ fontSize:10.5, fontWeight:700, opacity:0.88, letterSpacing:'0.07em', margin:'0 0 10px', position:'relative', textTransform:'uppercase' }}>{label}</p>
+    <p style={{ fontSize:42, fontWeight:800, lineHeight:1, margin:0, position:'relative' }}>{value}</p>
+  </div>
+);
 
 const AdminDocuments = () => {
   const [documents, setDocuments]       = useState([]);
   const [loading, setLoading]           = useState(true);
+  const [dlLoading, setDlLoading]       = useState({});
   const [search, setSearch]             = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [page, setPage]                 = useState(1);
@@ -29,165 +46,195 @@ const AdminDocuments = () => {
 
   useEffect(() => {
     adminApi.getAllDocuments()
-      .then((res) => setDocuments(res.data))
+      .then(res => setDocuments(res.data||[]))
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
 
-  const filtered = documents.filter((d) => {
-    const s = search.toLowerCase();
-    const matchSearch =
-      !s ||
-      (d.employeeName || '').toLowerCase().includes(s) ||
-      (d.filename      || '').toLowerCase().includes(s) ||
-      (d.taskTitle     || '').toLowerCase().includes(s);
-    const matchStatus = filterStatus === 'all' || d.status === filterStatus;
-    return matchSearch && matchStatus;
+  const filtered = documents.filter(d => {
+    const s=search.toLowerCase();
+    const matchSearch=!s||(d.employeeName||'').toLowerCase().includes(s)||(d.filename||'').toLowerCase().includes(s)||(d.taskTitle||'').toLowerCase().includes(s);
+    return matchSearch&&(filterStatus==='all'||d.status===filterStatus);
   });
 
-  const totalPages = Math.ceil(filtered.length / PER_PAGE);
-  const paginated  = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+  const totalPages = Math.ceil(filtered.length/PER_PAGE);
+  const paginated  = filtered.slice((page-1)*PER_PAGE,page*PER_PAGE);
 
-  const downloadUrl = (id) =>
-    `${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/admin/documents/${id}/download`;
+  /* ── Robust download: tries adminApi first, then direct fetch ── */
+  const handleDownload = async (doc) => {
+    const id = doc._id || doc.id;
+    setDlLoading(p=>({...p,[id]:true}));
+    try {
+      // Attempt 1: use adminApi if it exposes downloadDocument
+      if (adminApi.downloadDocument) {
+        const res = await adminApi.downloadDocument(id);
+        const blob = res.data instanceof Blob ? res.data : new Blob([res.data]);
+        triggerDownload(blob, doc.filename||'document');
+        return;
+      }
+
+      // Attempt 2: authenticated fetch to known endpoint patterns
+      const token = localStorage.getItem('token');
+      const baseURL = (process.env.REACT_APP_API_URL||'http://localhost:5000/api/v1').replace(/\/$/, '');
+      // Try both /admin/documents/:id/download and /documents/:id/download
+      const candidates = [
+        `${baseURL}/admin/documents/${id}/download`,
+        `${baseURL}/documents/${id}/download`,
+        `${baseURL}/hr/documents/${id}/download`,
+      ];
+
+      let blob = null;
+      let lastErr = '';
+      for (const url of candidates) {
+        try {
+          const res = await fetch(url, {
+            headers: token ? { Authorization:`Bearer ${token}` } : {},
+          });
+          if (res.ok) {
+            blob = await res.blob();
+            break;
+          }
+          lastErr = `HTTP ${res.status} at ${url}`;
+        } catch (e) {
+          lastErr = e.message;
+        }
+      }
+
+      if (blob) {
+        triggerDownload(blob, doc.filename||'document');
+      } else {
+        // Attempt 3: If the doc has a direct file URL, just open it
+        if (doc.fileUrl || doc.url || doc.filePath) {
+          window.open(doc.fileUrl||doc.url||doc.filePath, '_blank');
+        } else {
+          alert(`Download failed: ${lastErr}\n\nThe file may have been removed or your session may have expired.`);
+        }
+      }
+    } catch (err) {
+      alert(`Download error: ${err.message}`);
+    } finally {
+      setDlLoading(p=>({...p,[id]:false}));
+    }
+  };
+
+  const triggerDownload = (blob, filename) => {
+    const url = window.URL.createObjectURL(blob);
+    const a   = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  };
 
   return (
-    <div className="p-6 space-y-6">
+    <div style={{ fontFamily:"'Plus Jakarta Sans',sans-serif", minHeight:'100vh', background:'#f1f5f9', padding:'28px 28px 40px' }}>
+      <style>{SHARED}</style>
+      <div style={{ maxWidth:1400, margin:'0 auto', display:'flex', flexDirection:'column', gap:22 }}>
 
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">All Documents</h1>
-        <p className="text-gray-500 mt-1 text-sm">
-          View every uploaded document across all employees and departments
-        </p>
-      </div>
+        {/* Header */}
+        <div style={{ animation:'slideUp 0.5s ease-out both' }}>
+          <h1 style={{ fontSize:30, fontWeight:800, color:'#0f172a', margin:0 }}>All Documents</h1>
+          <p style={{ fontSize:14, color:'#64748b', margin:'4px 0 0' }}>View every uploaded document across all employees and departments</p>
+        </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {[
-          { label: 'Total Documents', value: documents.length,                                     color: 'text-purple-600' },
-          { label: 'Approved',         value: documents.filter((d) => d.status === 'approved').length, color: 'text-emerald-600' },
-          { label: 'Pending Review',   value: documents.filter((d) => d.status === 'pending').length,  color: 'text-amber-500' },
-          { label: 'Rejected',         value: documents.filter((d) => d.status === 'rejected').length, color: 'text-red-500' },
-        ].map((s) => (
-          <div key={s.label} className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
-            <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide">{s.label}</p>
-            <p className={`text-3xl font-extrabold mt-1 ${s.color}`}>{s.value}</p>
+        {/* Stat cards */}
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:14, animation:'slideUp 0.5s ease-out 60ms both' }}>
+          <StatCard label="Total Documents" value={documents.length}                                       color="#6366f1" Icon={DocumentTextIcon} />
+          <StatCard label="Approved"         value={documents.filter(d=>d.status==='approved').length}     color="#22c55e" Icon={DocumentIcon} />
+          <StatCard label="Pending Review"   value={documents.filter(d=>d.status==='pending').length}      color="#f97316" Icon={DocumentTextIcon} />
+          <StatCard label="Rejected"         value={documents.filter(d=>d.status==='rejected').length}     color="#ef4444" Icon={DocumentIcon} />
+        </div>
+
+        {/* Filters */}
+        <div style={{ background:'linear-gradient(135deg,#1e293b 0%,#334155 100%)', borderRadius:20, padding:'20px 24px', display:'flex', alignItems:'center', gap:12, flexWrap:'wrap', animation:'slideUp 0.5s ease-out 120ms both', position:'relative', overflow:'hidden' }}>
+          <div style={{ position:'absolute', right:20, top:'50%', transform:'translateY(-50%)', opacity:0.06, pointerEvents:'none' }}>
+            <DocumentTextIcon style={{ width:90, height:90, color:'#fff' }} />
           </div>
-        ))}
-      </div>
-
-      <div className="flex flex-wrap gap-3 items-center">
-        <div className="relative">
-          <MagnifyingGlassIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <input
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            placeholder="Search documents or employee…"
-            className="pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm w-72
-                       focus:outline-none focus:border-purple-500 transition-colors"
-          />
+          <div style={{ position:'relative', flex:1, minWidth:200 }}>
+            <MagnifyingGlassIcon style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', width:14, height:14, color:'#94a3b8' }} />
+            <input value={search} onChange={e=>{setSearch(e.target.value);setPage(1);}} placeholder="Search documents or employee…"
+              style={{ width:'100%', padding:'9px 14px 9px 36px', border:'1.5px solid rgba(255,255,255,0.15)', borderRadius:10, background:'rgba(255,255,255,0.08)', fontSize:13, color:'#fff', outline:'none', fontFamily:'inherit', boxSizing:'border-box' }}
+              onFocus={e=>e.target.style.borderColor='#6366f1'}
+              onBlur={e=>e.target.style.borderColor='rgba(255,255,255,0.15)'} />
+          </div>
+          <div style={{ display:'flex', gap:8 }}>
+            {['all','pending','approved','rejected'].map(s=>(
+              <button key={s} onClick={()=>{setFilterStatus(s);setPage(1);}}
+                style={{ padding:'8px 16px', borderRadius:10, fontSize:12.5, fontWeight:700, cursor:'pointer', fontFamily:'inherit', border:'none', transition:'all 0.15s',
+                  background:filterStatus===s?'#6366f1':'rgba(255,255,255,0.10)',
+                  color:filterStatus===s?'#fff':'rgba(255,255,255,0.65)' }}>
+                {s.charAt(0).toUpperCase()+s.slice(1)}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className="flex gap-2">
-          {['all', 'pending', 'approved', 'rejected'].map((s) => (
-            <button
-              key={s}
-              onClick={() => { setFilterStatus(s); setPage(1); }}
-              className={`px-4 py-2 rounded-xl text-xs font-semibold capitalize transition-colors ${
-                filterStatus === s
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-white border border-gray-200 text-gray-500 hover:border-purple-300'
-              }`}
-            >
-              {s === 'all' ? 'All' : s}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {loading ? (
-        <div className="py-20 text-center text-gray-400 text-sm">Loading documents…</div>
-      ) : (
-        <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-            {paginated.length === 0 ? (
-              <p className="col-span-full text-center text-gray-400 text-sm py-20">
-                No documents found.
-              </p>
-            ) : (
-              paginated.map((doc) => {
-                const st = STATUS_STYLES[doc.status] || STATUS_STYLES.pending;
+        {/* Document grid */}
+        {loading ? (
+          <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'80px 0', gap:14 }}>
+            <div style={{ position:'relative', width:40, height:40 }}>
+              <div style={{ position:'absolute', inset:0, border:'4px solid #e2e8f0', borderRadius:'50%' }} />
+              <div style={{ position:'absolute', inset:0, border:'4px solid transparent', borderTopColor:'#6366f1', borderRadius:'50%', animation:'spin 0.8s linear infinite' }} />
+            </div>
+            <p style={{ fontSize:13.5, color:'#64748b', fontWeight:600 }}>Loading documents…</p>
+          </div>
+        ) : (
+          <>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))', gap:16 }}>
+              {paginated.length===0 ? (
+                <p style={{ gridColumn:'1/-1', textAlign:'center', fontSize:14, color:'#94a3b8', padding:'64px 0' }}>No documents found.</p>
+              ) : paginated.map((doc,idx) => {
+                const st    = STATUS_STYLES[doc.status]||STATUS_STYLES.pending;
+                const accent = CARD_COLORS[idx%CARD_COLORS.length];
+                const id    = doc._id||doc.id;
+                const busy  = dlLoading[id];
                 return (
-                  <div
-                    key={doc._id}
-                    className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm
-                               hover:border-purple-200 hover:shadow-md transition-all"
-                  >
-                    <div className="flex justify-between items-start mb-3">
-                      <div className="w-11 h-11 rounded-xl bg-gray-50 border border-gray-100
-                                      flex items-center justify-center">
-                        <FileIcon filename={doc.filename} />
+                  <div key={id||idx} className="doc-card"
+                    style={{ background:'#fff', borderRadius:20, border:'1px solid #e2e8f0', overflow:'hidden', boxShadow:'0 2px 8px rgba(0,0,0,0.04)' }}>
+                    <div style={{ height:4, background:accent }} />
+                    <div style={{ padding:'18px 18px 16px' }}>
+                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:14 }}>
+                        <div style={{ width:44, height:44, borderRadius:12, background:'#f8fafc', border:'1px solid #f1f5f9', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                          <FileIcon filename={doc.filename} />
+                        </div>
+                        <span style={{ fontSize:11, fontWeight:700, padding:'3px 10px', borderRadius:8, background:st.bg, color:st.color }}>{st.label}</span>
                       </div>
-                      <span className={`text-xs font-bold px-2.5 py-1 rounded-full uppercase ${st.cls}`}>
-                        {st.label}
-                      </span>
-                    </div>
-
-                    <p className="text-sm font-bold text-gray-900 truncate mb-1">
-                      {doc.filename || 'Unknown file'}
-                    </p>
-                    <p className="text-xs text-gray-400 mb-4">{doc.taskTitle || 'Document upload'}</p>
-
-                    <div className="border-t border-gray-50 pt-3 flex justify-between items-center mb-3">
-                      <div>
-                        <p className="text-xs font-semibold text-gray-700">{doc.employeeName}</p>
-                        <p className="text-xs text-gray-400">{doc.department}</p>
+                      <p style={{ fontSize:13.5, fontWeight:700, color:'#0f172a', margin:'0 0 3px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{doc.filename||'Unknown file'}</p>
+                      <p style={{ fontSize:12, color:'#94a3b8', margin:'0 0 14px' }}>{doc.taskTitle||'Document upload'}</p>
+                      <div style={{ borderTop:'1px solid #f1f5f9', paddingTop:12, display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+                        <div>
+                          <p style={{ fontSize:12.5, fontWeight:700, color:'#0f172a', margin:'0 0 1px' }}>{doc.employeeName||'—'}</p>
+                          <p style={{ fontSize:11.5, color:'#94a3b8', margin:0 }}>{doc.department||'—'}</p>
+                        </div>
+                        <p style={{ fontSize:11.5, color:'#94a3b8', margin:0 }}>{doc.uploadedAt?new Date(doc.uploadedAt).toLocaleDateString():'—'}</p>
                       </div>
-                      <p className="text-xs text-gray-400">
-                        {doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString() : '—'}
-                      </p>
+                      <button onClick={()=>handleDownload(doc)} disabled={busy}
+                        style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:7, width:'100%', padding:'9px', background:busy?'#94a3b8':'#6366f1', border:'none', color:'#fff', borderRadius:11, fontSize:12.5, fontWeight:700, cursor:busy?'not-allowed':'pointer', fontFamily:'inherit', transition:'background 0.15s' }}
+                        onMouseEnter={e=>{ if(!busy) e.currentTarget.style.background='#4f46e5'; }}
+                        onMouseLeave={e=>{ if(!busy) e.currentTarget.style.background='#6366f1'; }}>
+                        {busy
+                          ? <><div style={{ width:13, height:13, border:'2px solid rgba(255,255,255,0.3)', borderTopColor:'#fff', borderRadius:'50%', animation:'spin 0.8s linear infinite' }} />Downloading…</>
+                          : <><ArrowDownTrayIcon style={{ width:14, height:14 }} />Download</>
+                        }
+                      </button>
                     </div>
-
-                    <a
-                      href={downloadUrl(doc._id)}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center justify-center gap-2 w-full bg-purple-50 hover:bg-purple-100
-                                 text-purple-700 text-xs font-semibold py-2 rounded-xl transition-colors"
-                    >
-                      <ArrowDownTrayIcon className="h-4 w-4" />
-                      Download
-                    </a>
                   </div>
                 );
-              })
-            )}
-          </div>
-
-          {totalPages > 1 && (
-            <div className="flex justify-center gap-2 mt-2">
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="px-4 py-2 border border-gray-200 rounded-xl text-sm text-gray-600
-                           hover:bg-gray-50 disabled:opacity-40 transition-colors"
-              >
-                ← Prev
-              </button>
-              <span className="px-4 py-2 text-sm text-gray-500">
-                Page {page} of {totalPages}
-              </span>
-              <button
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
-                className="px-4 py-2 border border-gray-200 rounded-xl text-sm text-gray-600
-                           hover:bg-gray-50 disabled:opacity-40 transition-colors"
-              >
-                Next →
-              </button>
+              })}
             </div>
-          )}
-        </>
-      )}
+
+            {totalPages>1&&(
+              <div style={{ display:'flex', justifyContent:'center', gap:8 }}>
+                <button onClick={()=>setPage(p=>Math.max(1,p-1))} disabled={page===1}
+                  style={{ padding:'8px 18px', border:'1.5px solid #e2e8f0', borderRadius:10, fontSize:13, fontWeight:700, background:'#fff', color:'#475569', cursor:page===1?'not-allowed':'pointer', opacity:page===1?0.4:1, fontFamily:'inherit' }}>← Prev</button>
+                <span style={{ padding:'8px 16px', fontSize:13, color:'#64748b', fontWeight:600 }}>Page {page} of {totalPages}</span>
+                <button onClick={()=>setPage(p=>Math.min(totalPages,p+1))} disabled={page===totalPages}
+                  style={{ padding:'8px 18px', border:'1.5px solid #e2e8f0', borderRadius:10, fontSize:13, fontWeight:700, background:'#fff', color:'#475569', cursor:page===totalPages?'not-allowed':'pointer', opacity:page===totalPages?0.4:1, fontFamily:'inherit' }}>Next →</button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 };
